@@ -28,6 +28,15 @@ CREATE TABLE IF NOT EXISTS personel (
     olusturma_tarihi TEXT
 )
 ''')
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS etiket (
+    id INTEGER PRIMARY KEY,
+    personel_id INTEGER,
+    uuid TEXT UNIQUE,
+    olusturma_tarihi TEXT,
+    FOREIGN KEY (personel_id) REFERENCES personel (id)
+)
+''')
 conn.commit()
 
 # Ana pencere
@@ -110,7 +119,7 @@ def save_personel():
             cursor.execute("SELECT id FROM personel WHERE uuid = ?", (unique_id,))
             if not cursor.fetchone():
                 break
-        print(f"Generated unique_id: {unique_id}")  # Test için
+
         tarih = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         cursor.execute("INSERT INTO personel (ad, soyad, vardiya, uuid, olusturma_tarihi) VALUES (?, ?, ?, ?, ?)",
                        (ad, soyad, vardiya, unique_id, tarih))
@@ -267,13 +276,11 @@ if personeller:
         if not selected:
             messagebox.showerror("Hata", "Personel seçin.")
             return
-        selected_id = None
+        personel_id = None
         for p in personeller:
             if f"{p[0]} {p[1]}" == selected:
-                selected_id = p[2]
+                personel_id = p[2]
                 break
-        cursor.execute("SELECT uuid FROM personel WHERE id = ?", (selected_id,))
-        uuid_code = cursor.fetchone()[0]
         adet = adet_entry.get()
         try:
             adet = int(adet)
@@ -282,23 +289,37 @@ if personeller:
             return
         # PDF oluşturma
         c = canvas.Canvas("etiketler.pdf", pagesize=(45*mm, 20*mm))
+        temp_files = []
         for i in range(adet):
+            # Benzersiz 10 karakterli alfanumerik kod üret
+            while True:
+                unique_id = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
+                cursor.execute("SELECT id FROM etiket WHERE uuid = ?", (unique_id,))
+                if not cursor.fetchone():
+                    break
+            tarih = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            cursor.execute("INSERT INTO etiket (personel_id, uuid, olusturma_tarihi) VALUES (?, ?, ?)",
+                           (personel_id, unique_id, tarih))
             qr = qrcode.QRCode(version=5, box_size=10, border=5)
-            qr.add_data(uuid_code)
+            qr.add_data(unique_id)
             qr.make(fit=True)
             img = qr.make_image(fill='black', back_color='white')
-            img.save("temp_qr.png")
-            c.drawImage("temp_qr.png", 2*mm, 1*mm, width=18*mm, height=18*mm)
+            temp_file = f"temp_qr_{i}.png"
+            img.save(temp_file)
+            temp_files.append(temp_file)
+            c.drawImage(temp_file, 2*mm, 1*mm, width=18*mm, height=18*mm)
             c.setFont("Helvetica", 8)
             c.drawString(25*mm, 7*mm, "CSL 1")
             c.drawString(25*mm, 3*mm, "Kontrol OK")
             c.showPage()
         c.save()
+        conn.commit()
         # PDF aç
         os.system("xdg-open etiketler.pdf")
-        # Log
-        tarih = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        cursor.execute("UPDATE personel SET olusturma_tarihi = ? WHERE id = ?", (tarih, selected_id))
+        # Temp dosyaları temizle
+        for temp_file in temp_files:
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
         conn.commit()
         messagebox.showinfo("Başarılı", f"{adet} etiket PDF olarak oluşturuldu ve açıldı.")
 
@@ -325,12 +346,19 @@ def kontrol():
     if not uuid_code:
         messagebox.showerror("Hata", "UUID girin.")
         return
-    cursor.execute("SELECT ad, soyad, olusturma_tarihi FROM personel WHERE uuid = ?", (uuid_code,))
-    result = cursor.fetchone()
-    if result:
-        info_label.configure(text=f"Ad: {result[0]}\nSoyad: {result[1]}\nTarih: {result[2]}")
+    # Önce etiket tablosundan ara
+    cursor.execute("SELECT personel_id FROM etiket WHERE uuid = ?", (uuid_code,))
+    etiket_result = cursor.fetchone()
+    if etiket_result:
+        personel_id = etiket_result[0]
+        cursor.execute("SELECT ad, soyad, olusturma_tarihi FROM personel WHERE id = ?", (personel_id,))
+        result = cursor.fetchone()
+        if result:
+            info_label.configure(text=f"Ad: {result[0]}\nSoyad: {result[1]}\nTarih: {result[2]}")
+        else:
+            messagebox.showerror("Hata", "Personel bulunamadı.")
     else:
-        messagebox.showerror("Hata", "Personel bulunamadı.")
+        messagebox.showerror("Hata", "Etiket bulunamadı.")
 
 kontrol_btn = ctk.CTkButton(kontrol_frame, text="Kontrol Et", command=kontrol)
 kontrol_btn.pack(pady=10)
