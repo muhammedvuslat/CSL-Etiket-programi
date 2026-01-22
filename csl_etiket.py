@@ -8,6 +8,8 @@ from PIL import Image
 import pyzbar.pyzbar as pyzbar
 from tkinter import filedialog, messagebox
 import uuid
+import random
+import string
 from datetime import datetime
 import os
 
@@ -29,142 +31,235 @@ CREATE TABLE IF NOT EXISTS personel (
 conn.commit()
 
 # Ana pencere
-ctk.set_appearance_mode("System")
-ctk.set_default_color_theme("blue")
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("dark-blue")
 
 root = ctk.CTk()
 root.title("CSL Etiket Programı")
-root.geometry("400x300")
+root.geometry("600x500")
+
+# Frame'ler
+menu_frame = ctk.CTkFrame(root)
+personel_frame = ctk.CTkFrame(root)
+bas_frame = ctk.CTkFrame(root)
+kontrol_frame = ctk.CTkFrame(root)
+
+for frame in [menu_frame, personel_frame, bas_frame, kontrol_frame]:
+    frame.pack(fill="both", expand=True)
+
+# Başlangıçta sadece menu göster
+personel_frame.pack_forget()
+bas_frame.pack_forget()
+kontrol_frame.pack_forget()
+
+# Çık butonu
+exit_btn = ctk.CTkButton(root, text="Çık", command=root.quit, fg_color="#DC143C", hover_color="#B22222", width=50)
+exit_btn.place(relx=1.0, rely=0.0, anchor="ne", x=-10, y=10)
 
 # Fonksiyonlar
-def personel_tanimla():
-    personel_window = ctk.CTkToplevel(root)
-    personel_window.title("Personel Yönetimi")
-    personel_window.geometry("600x400")
-
-    def refresh_list():
-        for widget in list_frame.winfo_children():
-            widget.destroy()
-        cursor.execute("SELECT id, ad, soyad, vardiya FROM personel")
-        personeller = cursor.fetchall()
-        for p in personeller:
-            frame = ctk.CTkFrame(list_frame)
-            frame.pack(fill="x", padx=5, pady=2)
-            label = ctk.CTkLabel(frame, text=f"{p[1]} {p[2]} - {p[3]}")
-            label.pack(side="left", padx=5)
-            edit_btn = ctk.CTkButton(frame, text="Düzenle", command=lambda id=p[0]: edit_personel(id))
-            edit_btn.pack(side="right", padx=5)
-            delete_btn = ctk.CTkButton(frame, text="Sil", command=lambda id=p[0]: delete_personel(id))
-            delete_btn.pack(side="right", padx=5)
-
-    def add_personel():
-        add_window = ctk.CTkToplevel(personel_window)
-        add_window.title("Personel Ekle")
-        add_window.geometry("300x200")
-
-        ad_label = ctk.CTkLabel(add_window, text="Ad:")
-        ad_label.pack(pady=5)
-        ad_entry = ctk.CTkEntry(add_window)
-        ad_entry.pack(pady=5)
-
-        soyad_label = ctk.CTkLabel(add_window, text="Soyad:")
-        soyad_label.pack(pady=5)
-        soyad_entry = ctk.CTkEntry(add_window)
-        soyad_entry.pack(pady=5)
-
-        vardiya_label = ctk.CTkLabel(add_window, text="Vardiya:")
-        vardiya_label.pack(pady=5)
-        vardiya_entry = ctk.CTkEntry(add_window)
-        vardiya_entry.pack(pady=5)
-
-        def save():
-            ad = ad_entry.get()
-            soyad = soyad_entry.get()
-            vardiya = vardiya_entry.get()
-            if ad and soyad and vardiya:
-                unique_id = str(uuid.uuid4())
-                tarih = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                cursor.execute("INSERT INTO personel (ad, soyad, vardiya, uuid, olusturma_tarihi) VALUES (?, ?, ?, ?, ?)",
-                               (ad, soyad, vardiya, unique_id, tarih))
-                conn.commit()
-                messagebox.showinfo("Başarılı", "Personel eklendi.")
-                add_window.destroy()
-                refresh_list()
-            else:
-                messagebox.showerror("Hata", "Tüm alanları doldurun.")
-
-        save_btn = ctk.CTkButton(add_window, text="Kaydet", command=save)
-        save_btn.pack(pady=10)
-
-    def edit_personel(id):
-        cursor.execute("SELECT ad, soyad, vardiya FROM personel WHERE id = ?", (id,))
-        p = cursor.fetchone()
-        edit_window = ctk.CTkToplevel(personel_window)
-        edit_window.title("Personel Düzenle")
-        edit_window.geometry("300x200")
-
-        ad_entry = ctk.CTkEntry(edit_window)
-        ad_entry.insert(0, p[0])
-        ad_entry.pack(pady=5)
-
-        soyad_entry = ctk.CTkEntry(edit_window)
-        soyad_entry.insert(0, p[1])
-        soyad_entry.pack(pady=5)
-
-        vardiya_entry = ctk.CTkEntry(edit_window)
-        vardiya_entry.insert(0, p[2])
-        vardiya_entry.pack(pady=5)
-
-        def update():
-            ad = ad_entry.get()
-            soyad = soyad_entry.get()
-            vardiya = vardiya_entry.get()
-            if ad and soyad and vardiya:
-                cursor.execute("UPDATE personel SET ad = ?, soyad = ?, vardiya = ? WHERE id = ?",
-                               (ad, soyad, vardiya, id))
-                conn.commit()
-                messagebox.showinfo("Başarılı", "Personel güncellendi.")
-                edit_window.destroy()
-                refresh_list()
-            else:
-                messagebox.showerror("Hata", "Tüm alanları doldurun.")
-
-        update_btn = ctk.CTkButton(edit_window, text="Güncelle", command=update)
-        update_btn.pack(pady=10)
-
-    def delete_personel(id):
-        if messagebox.askyesno("Sil", "Personeli silmek istediğinizden emin misiniz?"):
-            cursor.execute("DELETE FROM personel WHERE id = ?", (id,))
-            conn.commit()
-            refresh_list()
-
-    list_frame = ctk.CTkScrollableFrame(personel_window)
-    list_frame.pack(fill="both", expand=True, padx=10, pady=10)
-
-    add_btn = ctk.CTkButton(personel_window, text="Personel Ekle", command=add_personel)
-    add_btn.pack(pady=10)
-
-    refresh_list()
-
-def etiket_bas():
-    bas_window = ctk.CTkToplevel(root)
-    bas_window.title("Etiket Bas")
-    bas_window.geometry("400x200")
-
+personeller = []
+def update_bas_personel():
+    global personeller
     cursor.execute("SELECT ad, soyad, id FROM personel")
     personeller = cursor.fetchall()
-    if not personeller:
-        messagebox.showerror("Hata", "Hiç personel tanımlanmamış.")
-        return
+    try:
+        if personeller:
+            personel_options = [f"{p[0]} {p[1]}" for p in personeller]
+            personel_combo.configure(values=personel_options)
+            personel_combo.set("")  # Seçimi temizle
+        else:
+            personel_combo.configure(values=[])
+            personel_combo.set("")
+    except NameError:
+        pass  # personel_combo henüz tanımlanmamış
 
+# Personel yönetimi frame
+def refresh_list():
+    for widget in list_frame.winfo_children():
+        widget.destroy()
+    cursor.execute("SELECT id, ad, soyad, vardiya FROM personel")
+    personeller = cursor.fetchall()
+    for p in personeller:
+        frame = ctk.CTkFrame(list_frame)
+        frame.pack(fill="x", padx=5, pady=2)
+        label = ctk.CTkLabel(frame, text=f"{p[1]} {p[2]} - {p[3]}")
+        label.pack(side="left", padx=5)
+        edit_btn = ctk.CTkButton(frame, text="Düzenle", command=lambda id=p[0]: edit_personel(id))
+        edit_btn.pack(side="right", padx=5)
+        delete_btn = ctk.CTkButton(frame, text="Sil", command=lambda id=p[0]: delete_personel(id))
+        delete_btn.pack(side="right", padx=5)
+
+def add_personel():
+    # Formu göster
+    add_form_frame.pack(fill="x", padx=10, pady=10)
+    add_btn.pack_forget()  # Ekle butonunu gizle
+
+def save_personel():
+    ad = ad_entry.get()
+    soyad = soyad_entry.get()
+    vardiya = vardiya_entry.get()
+    if ad and soyad and vardiya:
+        # Aynı personel var mı kontrol et
+        cursor.execute("SELECT id FROM personel WHERE ad = ? AND soyad = ?", (ad, soyad))
+        if cursor.fetchone():
+            messagebox.showerror("Hata", "Bu personel zaten mevcut.")
+            return
+        # Benzersiz 10 karakterli alfanumerik kod üret
+        while True:
+            unique_id = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
+            cursor.execute("SELECT id FROM personel WHERE uuid = ?", (unique_id,))
+            if not cursor.fetchone():
+                break
+        print(f"Generated unique_id: {unique_id}")  # Test için
+        tarih = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute("INSERT INTO personel (ad, soyad, vardiya, uuid, olusturma_tarihi) VALUES (?, ?, ?, ?, ?)",
+                       (ad, soyad, vardiya, unique_id, tarih))
+        conn.commit()
+        messagebox.showinfo("Başarılı", "Personel eklendi.")
+        # Formu temizle ve gizle
+        ad_entry.delete(0, 'end')
+        soyad_entry.delete(0, 'end')
+        vardiya_entry.delete(0, 'end')
+        add_form_frame.pack_forget()
+        add_btn.pack(pady=10)
+        refresh_list()
+        # Etiket Bas alanını güncelle
+        update_bas_personel()
+    else:
+        messagebox.showerror("Hata", "Tüm alanları doldurun.")
+
+def cancel_add():
+    ad_entry.delete(0, 'end')
+    soyad_entry.delete(0, 'end')
+    vardiya_entry.delete(0, 'end')
+    add_form_frame.pack_forget()
+    add_btn.pack(pady=10)
+
+current_edit_id = None
+
+def edit_personel(id):
+    global current_edit_id
+    current_edit_id = id
+    cursor.execute("SELECT ad, soyad, vardiya FROM personel WHERE id = ?", (id,))
+    p = cursor.fetchone()
+    edit_ad_entry.delete(0, 'end')
+    edit_ad_entry.insert(0, p[0])
+    edit_soyad_entry.delete(0, 'end')
+    edit_soyad_entry.insert(0, p[1])
+    edit_vardiya_entry.delete(0, 'end')
+    edit_vardiya_entry.insert(0, p[2])
+    # Formu göster
+    edit_form_frame.pack(fill="x", padx=10, pady=10)
+    add_btn.pack_forget()  # Ekle butonunu gizle
+
+def update_personel(id):
+    ad = edit_ad_entry.get()
+    soyad = edit_soyad_entry.get()
+    vardiya = edit_vardiya_entry.get()
+    if ad and soyad and vardiya:
+        cursor.execute("UPDATE personel SET ad = ?, soyad = ?, vardiya = ? WHERE id = ?",
+                       (ad, soyad, vardiya, id))
+        conn.commit()
+        messagebox.showinfo("Başarılı", "Personel güncellendi.")
+        edit_form_frame.pack_forget()
+        add_btn.pack(pady=10)
+        refresh_list()
+    else:
+        messagebox.showerror("Hata", "Tüm alanları doldurun.")
+
+def cancel_edit():
+    edit_ad_entry.delete(0, 'end')
+    edit_soyad_entry.delete(0, 'end')
+    edit_vardiya_entry.delete(0, 'end')
+    edit_form_frame.pack_forget()
+    add_btn.pack(pady=10)
+
+def delete_personel(id):
+    if messagebox.askyesno("Sil", "Personeli silmek istediğinizden emin misiniz?"):
+        cursor.execute("DELETE FROM personel WHERE id = ?", (id,))
+        conn.commit()
+        refresh_list()
+
+geri_btn_personel = ctk.CTkButton(personel_frame, text="Geri", command=lambda: show_frame(menu_frame))
+geri_btn_personel.pack(anchor="nw", padx=10, pady=10)
+
+personel_title = ctk.CTkLabel(personel_frame, text="Personel Yönetimi", font=ctk.CTkFont(size=16, weight="bold"))
+personel_title.pack(pady=10)
+
+list_frame = ctk.CTkScrollableFrame(personel_frame)
+list_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+# Ekle formu
+add_form_frame = ctk.CTkFrame(personel_frame)
+ad_label = ctk.CTkLabel(add_form_frame, text="Ad:")
+ad_label.grid(row=0, column=0, padx=5, pady=5)
+ad_entry = ctk.CTkEntry(add_form_frame)
+ad_entry.grid(row=0, column=1, padx=5, pady=5)
+
+soyad_label = ctk.CTkLabel(add_form_frame, text="Soyad:")
+soyad_label.grid(row=1, column=0, padx=5, pady=5)
+soyad_entry = ctk.CTkEntry(add_form_frame)
+soyad_entry.grid(row=1, column=1, padx=5, pady=5)
+
+vardiya_label = ctk.CTkLabel(add_form_frame, text="Vardiya:")
+vardiya_label.grid(row=2, column=0, padx=5, pady=5)
+vardiya_entry = ctk.CTkEntry(add_form_frame)
+vardiya_entry.grid(row=2, column=1, padx=5, pady=5)
+
+save_btn = ctk.CTkButton(add_form_frame, text="Kaydet", command=save_personel)
+save_btn.grid(row=3, column=0, padx=5, pady=10)
+
+cancel_btn = ctk.CTkButton(add_form_frame, text="İptal", command=cancel_add)
+cancel_btn.grid(row=3, column=1, padx=5, pady=10)
+
+# Düzenle formu
+edit_form_frame = ctk.CTkFrame(personel_frame)
+edit_ad_label = ctk.CTkLabel(edit_form_frame, text="Ad:")
+edit_ad_label.grid(row=0, column=0, padx=5, pady=5)
+edit_ad_entry = ctk.CTkEntry(edit_form_frame)
+edit_ad_entry.grid(row=0, column=1, padx=5, pady=5)
+
+edit_soyad_label = ctk.CTkLabel(edit_form_frame, text="Soyad:")
+edit_soyad_label.grid(row=1, column=0, padx=5, pady=5)
+edit_soyad_entry = ctk.CTkEntry(edit_form_frame)
+edit_soyad_entry.grid(row=1, column=1, padx=5, pady=5)
+
+edit_vardiya_label = ctk.CTkLabel(edit_form_frame, text="Vardiya:")
+edit_vardiya_label.grid(row=2, column=0, padx=5, pady=5)
+edit_vardiya_entry = ctk.CTkEntry(edit_form_frame)
+edit_vardiya_entry.grid(row=2, column=1, padx=5, pady=5)
+
+update_btn = ctk.CTkButton(edit_form_frame, text="Güncelle", command=lambda: update_personel(current_edit_id))
+update_btn.grid(row=3, column=0, padx=5, pady=10)
+
+cancel_edit_btn = ctk.CTkButton(edit_form_frame, text="İptal", command=cancel_edit)
+cancel_edit_btn.grid(row=3, column=1, padx=5, pady=10)
+
+add_btn = ctk.CTkButton(personel_frame, text="Personel Ekle", command=add_personel)
+add_btn.pack(pady=10)
+
+refresh_list()
+
+refresh_list()
+
+# Etiket Bas frame
+geri_btn_bas = ctk.CTkButton(bas_frame, text="Geri", command=lambda: show_frame(menu_frame))
+geri_btn_bas.pack(anchor="nw", padx=10, pady=10)
+
+bas_title = ctk.CTkLabel(bas_frame, text="Etiket Bas", font=ctk.CTkFont(size=16, weight="bold"))
+bas_title.pack(pady=10)
+
+cursor.execute("SELECT ad, soyad, id FROM personel")
+personeller = cursor.fetchall()
+if personeller:
     personel_options = [f"{p[0]} {p[1]}" for p in personeller]
     personel_var = ctk.StringVar()
-    personel_combo = ctk.CTkComboBox(bas_window, values=personel_options, variable=personel_var)
+    personel_combo = ctk.CTkComboBox(bas_frame, values=personel_options, variable=personel_var)
     personel_combo.pack(pady=10)
 
-    adet_label = ctk.CTkLabel(bas_window, text="Adet:")
+    adet_label = ctk.CTkLabel(bas_frame, text="Adet:")
     adet_label.pack(pady=5)
-    adet_entry = ctk.CTkEntry(bas_window)
+    adet_entry = ctk.CTkEntry(bas_frame)
     adet_entry.pack(pady=5)
 
     def bas():
@@ -188,13 +283,15 @@ def etiket_bas():
         # PDF oluşturma
         c = canvas.Canvas("etiketler.pdf", pagesize=(45*mm, 20*mm))
         for i in range(adet):
-            qr = qrcode.QRCode(version=1, box_size=10, border=5)
+            qr = qrcode.QRCode(version=5, box_size=10, border=5)
             qr.add_data(uuid_code)
             qr.make(fit=True)
             img = qr.make_image(fill='black', back_color='white')
             img.save("temp_qr.png")
-            c.drawImage("temp_qr.png", 2*mm, 5*mm, width=10*mm, height=10*mm)
-            c.drawString(2*mm, 2*mm, "CSL 1 Kontrol OK")
+            c.drawImage("temp_qr.png", 2*mm, 1*mm, width=18*mm, height=18*mm)
+            c.setFont("Helvetica", 8)
+            c.drawString(25*mm, 7*mm, "CSL 1")
+            c.drawString(25*mm, 3*mm, "Kontrol OK")
             c.showPage()
         c.save()
         # PDF aç
@@ -204,50 +301,63 @@ def etiket_bas():
         cursor.execute("UPDATE personel SET olusturma_tarihi = ? WHERE id = ?", (tarih, selected_id))
         conn.commit()
         messagebox.showinfo("Başarılı", f"{adet} etiket PDF olarak oluşturuldu ve açıldı.")
-        bas_window.destroy()
 
-    bas_btn = ctk.CTkButton(bas_window, text="Bas", command=bas)
+    bas_btn = ctk.CTkButton(bas_frame, text="Bas", command=bas)
     bas_btn.pack(pady=10)
+else:
+    no_personel_label = ctk.CTkLabel(bas_frame, text="Hiç personel tanımlanmamış.")
+    no_personel_label.pack(pady=20)
 
-def etiket_kontrol_et():
-    kontrol_window = ctk.CTkToplevel(root)
-    kontrol_window.title("Etiket Kontrol Et")
-    kontrol_window.geometry("400x200")
+# Etiket Kontrol Et frame
+geri_btn_kontrol = ctk.CTkButton(kontrol_frame, text="Geri", command=lambda: show_frame(menu_frame))
+geri_btn_kontrol.pack(anchor="nw", padx=10, pady=10)
 
-    uuid_label = ctk.CTkLabel(kontrol_window, text="QR Kod (UUID):")
-    uuid_label.pack(pady=5)
-    uuid_entry = ctk.CTkEntry(kontrol_window)
-    uuid_entry.pack(pady=5)
+kontrol_title = ctk.CTkLabel(kontrol_frame, text="Etiket Kontrol Et", font=ctk.CTkFont(size=16, weight="bold"))
+kontrol_title.pack(pady=10)
 
-    def kontrol():
-        uuid_code = uuid_entry.get()
-        if not uuid_code:
-            messagebox.showerror("Hata", "UUID girin.")
-            return
-        cursor.execute("SELECT ad, soyad, olusturma_tarihi FROM personel WHERE uuid = ?", (uuid_code,))
-        result = cursor.fetchone()
-        if result:
-            info_label.configure(text=f"Ad: {result[0]}\nSoyad: {result[1]}\nTarih: {result[2]}")
-        else:
-            messagebox.showerror("Hata", "Personel bulunamadı.")
+uuid_label = ctk.CTkLabel(kontrol_frame, text="QR Kod (UUID):")
+uuid_label.pack(pady=5)
+uuid_entry = ctk.CTkEntry(kontrol_frame)
+uuid_entry.pack(pady=5)
 
-    kontrol_btn = ctk.CTkButton(kontrol_window, text="Kontrol Et", command=kontrol)
-    kontrol_btn.pack(pady=10)
+def kontrol():
+    uuid_code = uuid_entry.get()
+    if not uuid_code:
+        messagebox.showerror("Hata", "UUID girin.")
+        return
+    cursor.execute("SELECT ad, soyad, olusturma_tarihi FROM personel WHERE uuid = ?", (uuid_code,))
+    result = cursor.fetchone()
+    if result:
+        info_label.configure(text=f"Ad: {result[0]}\nSoyad: {result[1]}\nTarih: {result[2]}")
+    else:
+        messagebox.showerror("Hata", "Personel bulunamadı.")
 
-    info_label = ctk.CTkLabel(kontrol_window, text="")
-    info_label.pack(pady=10)
+kontrol_btn = ctk.CTkButton(kontrol_frame, text="Kontrol Et", command=kontrol)
+kontrol_btn.pack(pady=10)
+
+info_label = ctk.CTkLabel(kontrol_frame, text="")
+info_label.pack(pady=10)
+
+def show_frame(frame):
+    menu_frame.pack_forget()
+    personel_frame.pack_forget()
+    bas_frame.pack_forget()
+    kontrol_frame.pack_forget()
+    frame.pack(fill="both", expand=True)
+    if frame == bas_frame:
+        update_bas_personel()
 
 # Ana menü
-title_label = ctk.CTkLabel(root, text="CSL Etiket Programı", font=ctk.CTkFont(size=20, weight="bold"))
+title_label = ctk.CTkLabel(menu_frame, text="CSL Etiket Programı", font=ctk.CTkFont(size=20, weight="bold"))
 title_label.pack(pady=20)
 
-personel_btn = ctk.CTkButton(root, text="Personel Tanımla", command=personel_tanimla)
+personel_btn = ctk.CTkButton(menu_frame, text="Personel Yönet", command=lambda: show_frame(personel_frame))
 personel_btn.pack(pady=10)
 
-bas_btn = ctk.CTkButton(root, text="Etiket Bas", command=etiket_bas)
+bas_btn = ctk.CTkButton(menu_frame, text="Etiket Bas", command=lambda: show_frame(bas_frame), fg_color="#228B22", hover_color="#006400")
 bas_btn.pack(pady=10)
 
-kontrol_btn = ctk.CTkButton(root, text="Etiket Kontrol Et", command=etiket_kontrol_et)
+kontrol_btn = ctk.CTkButton(menu_frame, text="Etiket Kontrol Et", command=lambda: show_frame(kontrol_frame), fg_color="#FF9900", hover_color="#FFA500")
 kontrol_btn.pack(pady=10)
 
 root.mainloop()
