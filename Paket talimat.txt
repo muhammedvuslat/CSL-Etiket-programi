@@ -1,23 +1,37 @@
-Windows exe paketlemek için adım adım talimatlar aşağıda. Bu işlemleri bir Windows makinesinde yapman gerekiyor (Linux'ta doğrudan Windows exe üretemem, çünkü PyInstaller platforma bağımlı).
 
-Ön Hazırlık:
-Kod dosyasını kopyala: /home/uil/Desktop/CSL Et'ket programi/csl_etiket.py dosyasını USB flash bellek veya bulut (Google Drive, Dropbox) ile Windows makinesine aktar. Veritabanı dosyası (csl_etiket.db) varsa onu da kopyala (uygulama SQLite kullanıyor, bu dosya olmadan çalışmayabilir).
-Windows makinesi gereksinimleri: Windows 10/11, internet bağlantısı ve yönetici hakları (Python kurulumu için).
-Adım 1: Python'u Kur
-Eğer Python yüklü değilse, python.org adresinden Python 3.12 (veya en son sürüm) indir ve kur. Kurulum sırasında "Add Python to PATH" seçeneğini işaretle.
-Kurulum sonrası, Komut İstemi'ni aç (Win + R, "cmd" yaz) ve python --version yazarak kontrol et. Çıktı "Python 3.x.x" olmalı.
-Adım 2: Gerekli Kütüphaneleri Kur
-Komut İstemi'nde şu komutu çalıştır (internet bağlantısı gerektirir):
-Bu komut tüm bağımlılıkları yükleyecek. Eğer hata alırsan, yönetici olarak Komut İstemi'ni aç (sağ tık > "Run as administrator").
-Adım 3: Uygulamayı Paketle
-Kod dosyasının bulunduğu klasöre git (örneğin, cd C:\Users\Kullanici\Desktop\CSL_Etiket).
-Komut İstemi'nde şu komutu çalıştır:
-Bu işlem birkaç dakika sürebilir. Başarıyla tamamlandığında, dist klasöründe csl_etiket.exe dosyası oluşacak.
-Adım 4: Exe'yi Test Et
-csl_etiket.exe dosyasını çalıştır. Python kurulu olmadan çalışmalı.
-Uygulamayı test et: Personel ekle, etiket bas, QR kod doğrula. PDF'ler otomatik açılmalı.
-Eğer sorun çıkarsa (örneğin, veritabanı hatası), csl_etiket.db dosyasının exe ile aynı klasörde olduğundan emin ol.
-Ek Notlar:
-Paketleme sonrası build ve dist klasörleri oluşur; sadece dist/csl_etiket.exe dosyasını dağıt.
-Eğer Windows'ta Tkinter hatası alırsan, Python kurulumunu kontrol et (Tkinter varsayılan olarak gelir).
-Sorun yaşarsan, hangi adımda takıldığını belirt, detaylı yardım vereyim.
+User: Adım adım talimat ver
+
+GitHub Copilot: Windows exe paketlemek için adım adım talimatlar aşağıda. Bu işlemleri bir Windows makinesinde yapman gerekiyor (Linux'ta doğrudan Windows exe üretemem, çünkü PyInstaller platforma bağımlı).
+
+### Ön Hazırlık:
+- **Kod dosyasını kopyala:** `/home/uil/Desktop/CSL Et'ket programi/csl_etiket.py` dosyasını USB flash bellek veya bulut (Google Drive, Dropbox) ile Windows makinesine aktar. Veritabanı dosyası (`csl_etiket.db`) varsa onu da kopyala (uygulama SQLite kullanıyor, bu dosya olmadan çalışmayabilir).
+- **Windows makinesi gereksinimleri:** Windows 10/11, internet bağlantısı ve yönetici hakları (Python kurulumu için).
+
+### Adım 1: Python'u Kur
+- Eğer Python yüklü değilse, [python.org](https://www.python.org/downloads/) adresinden Python 3.12 (veya en son sürüm) indir ve kur. Kurulum sırasında "Add Python to PATH" seçeneğini işaretle.
+- Kurulum sonrası, Komut İstemi'ni aç (Win + R, "cmd" yaz) ve `python --version` yazarak kontrol et. Çıktı "Python 3.x.x" olmalı.
+
+### Adım 2: Gerekli Kütüphaneleri Kur
+- Komut İstemi'nde şu komutu çalıştır (internet bağlantısı gerektirir):
+  ```
+  pip install customtkinter qrcode reportlab pillow pyzbar pyinstaller
+  ```
+- Bu komut tüm bağımlılıkları yükleyecek. Eğer hata alırsan, yönetici olarak Komut İstemi'ni aç (sağ tık > "Run as administrator").
+
+### Adım 3: Uygulamayı Paketle
+- Kod dosyasının bulunduğu klasöre git (örneğin, `cd C:\Users\Kullanici\Desktop\CSL_Etiket`).
+- Komut İstemi'nde şu komutu çalıştır:
+  ```
+  pyinstaller --onefile --windowed csl_etiket.py
+  ```
+- Bu işlem birkaç dakika sürebilir. Başarıyla tamamlandığında, dist klasöründe `csl_etiket.exe` dosyası oluşacak.
+
+### Adım 4: Exe'yi Test Et
+- `csl_etiket.exe` dosyasını çalıştır. Python kurulu olmadan çalışmalı.
+- Uygulamayı test et: Personel ekle, etiket bas, QR kod doğrula. PDF'ler otomatik açılmalı.
+- Eğer sorun çıkarsa (örneğin, veritabanı hatası), `csl_etiket.db` dosyasının exe ile aynı klasörde olduğundan emin ol.
+
+### Ek Notlar:
+- Paketleme sonrası build ve dist klasörleri oluşur; sadece `dist/csl_etiket.exe` dosyasını dağıt.
+- Eğer Windows'ta Tkinter hatası alırsan, Python kurulumunu kontrol et (Tkinter varsayılan olarak gelir).
+- Sorun yaşarsan, hangi adımda takıldığını belirt, detaylı yardım vereyim.
