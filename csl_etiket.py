@@ -52,14 +52,16 @@ menu_frame = ctk.CTkFrame(root)
 personel_frame = ctk.CTkFrame(root)
 bas_frame = ctk.CTkFrame(root)
 kontrol_frame = ctk.CTkFrame(root)
+ayarlar_frame = ctk.CTkFrame(root)
 
-for frame in [menu_frame, personel_frame, bas_frame, kontrol_frame]:
+for frame in [menu_frame, personel_frame, bas_frame, kontrol_frame, ayarlar_frame]:
     frame.pack(fill="both", expand=True)
 
 # Başlangıçta sadece menu göster
 personel_frame.pack_forget()
 bas_frame.pack_forget()
 kontrol_frame.pack_forget()
+ayarlar_frame.pack_forget()
 
 # Çık butonu
 exit_btn = ctk.CTkButton(root, text="Çık", command=root.quit, fg_color="#DC143C", hover_color="#B22222", width=50)
@@ -71,16 +73,13 @@ def update_bas_personel():
     global personeller
     cursor.execute("SELECT ad, soyad, id FROM personel")
     personeller = cursor.fetchall()
-    try:
-        if personeller:
-            personel_options = [f"{p[0]} {p[1]}" for p in personeller]
-            personel_combo.configure(values=personel_options)
-            personel_combo.set("")  # Seçimi temizle
-        else:
-            personel_combo.configure(values=[])
-            personel_combo.set("")
-    except NameError:
-        pass  # personel_combo henüz tanımlanmamış
+    if personeller:
+        personel_options = [f"{p[0]} {p[1]}" for p in personeller]
+        personel_combo.configure(values=personel_options)
+        personel_combo.set("")  # Seçimi temizle
+    else:
+        personel_combo.configure(values=[])
+        personel_combo.set("")
 
 # Personel yönetimi frame
 def refresh_list():
@@ -258,76 +257,74 @@ geri_btn_bas.pack(anchor="nw", padx=10, pady=10)
 bas_title = ctk.CTkLabel(bas_frame, text="Etiket Bas", font=ctk.CTkFont(size=16, weight="bold"))
 bas_title.pack(pady=10)
 
-cursor.execute("SELECT ad, soyad, id FROM personel")
-personeller = cursor.fetchall()
-if personeller:
-    personel_options = [f"{p[0]} {p[1]}" for p in personeller]
-    personel_var = ctk.StringVar()
-    personel_combo = ctk.CTkComboBox(bas_frame, values=personel_options, variable=personel_var)
-    personel_combo.pack(pady=10)
+personel_var = ctk.StringVar()
+personel_combo = ctk.CTkComboBox(bas_frame, values=[], variable=personel_var)
+personel_combo.pack(pady=10)
 
-    adet_label = ctk.CTkLabel(bas_frame, text="Adet:")
-    adet_label.pack(pady=5)
-    adet_entry = ctk.CTkEntry(bas_frame)
-    adet_entry.pack(pady=5)
+adet_label = ctk.CTkLabel(bas_frame, text="Adet:")
+adet_label.pack(pady=5)
+adet_entry = ctk.CTkEntry(bas_frame)
+adet_entry.pack(pady=5)
 
-    def bas():
-        selected = personel_var.get()
-        if not selected:
-            messagebox.showerror("Hata", "Personel seçin.")
-            return
-        personel_id = None
-        for p in personeller:
-            if f"{p[0]} {p[1]}" == selected:
-                personel_id = p[2]
+def bas():
+    global personeller
+    selected = personel_var.get()
+    if not selected:
+        messagebox.showerror("Hata", "Personel seçin.")
+        return
+    personel_id = None
+    for p in personeller:
+        if f"{p[0]} {p[1]}" == selected:
+            personel_id = p[2]
+            break
+    adet = adet_entry.get()
+    try:
+        adet = int(adet)
+    except:
+        messagebox.showerror("Hata", "Geçerli adet girin.")
+        return
+    # PDF oluşturma
+    c = canvas.Canvas("etiketler.pdf", pagesize=(45*mm, 20*mm))
+    temp_files = []
+    for i in range(adet):
+        # Benzersiz 10 karakterli alfanumerik kod üret
+        while True:
+            unique_id = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
+            cursor.execute("SELECT id FROM etiket WHERE uuid = ?", (unique_id,))
+            if not cursor.fetchone():
                 break
-        adet = adet_entry.get()
-        try:
-            adet = int(adet)
-        except:
-            messagebox.showerror("Hata", "Geçerli adet girin.")
-            return
-        # PDF oluşturma
-        c = canvas.Canvas("etiketler.pdf", pagesize=(45*mm, 20*mm))
-        temp_files = []
-        for i in range(adet):
-            # Benzersiz 10 karakterli alfanumerik kod üret
-            while True:
-                unique_id = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
-                cursor.execute("SELECT id FROM etiket WHERE uuid = ?", (unique_id,))
-                if not cursor.fetchone():
-                    break
-            tarih = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            cursor.execute("INSERT INTO etiket (personel_id, uuid, olusturma_tarihi) VALUES (?, ?, ?)",
-                           (personel_id, unique_id, tarih))
-            qr = qrcode.QRCode(version=5, box_size=10, border=5)
-            qr.add_data(unique_id)
-            qr.make(fit=True)
-            img = qr.make_image(fill='black', back_color='white')
-            temp_file = f"temp_qr_{i}.png"
-            img.save(temp_file)
-            temp_files.append(temp_file)
-            c.drawImage(temp_file, 2*mm, 1*mm, width=18*mm, height=18*mm)
-            c.setFont("Helvetica", 8)
-            c.drawString(25*mm, 7*mm, "CSL 1")
-            c.drawString(25*mm, 3*mm, "Kontrol OK")
-            c.showPage()
-        c.save()
-        conn.commit()
-        # PDF aç
+        tarih = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute("INSERT INTO etiket (personel_id, uuid, olusturma_tarihi) VALUES (?, ?, ?)",
+                       (personel_id, unique_id, tarih))
+        qr = qrcode.QRCode(version=5, box_size=10, border=5)
+        qr.add_data(unique_id)
+        qr.make(fit=True)
+        img = qr.make_image(fill='black', back_color='white')
+        temp_file = f"temp_qr_{i}.png"
+        img.save(temp_file)
+        temp_files.append(temp_file)
+        c.drawImage(temp_file, 2*mm, 1*mm, width=18*mm, height=18*mm)
+        c.setFont("Helvetica", 8)
+        c.drawString(25*mm, 7*mm, "CSL 1")
+        c.drawString(25*mm, 3*mm, "Kontrol OK")
+        c.showPage()
+    c.save()
+    conn.commit()
+    # PDF aç
+    import sys
+    if sys.platform == "win32":
+        os.startfile("etiketler.pdf")
+    else:
         os.system("xdg-open etiketler.pdf")
-        # Temp dosyaları temizle
-        for temp_file in temp_files:
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
-        conn.commit()
-        messagebox.showinfo("Başarılı", f"{adet} etiket PDF olarak oluşturuldu ve açıldı.")
+    # Temp dosyaları temizle
+    for temp_file in temp_files:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+    conn.commit()
+    messagebox.showinfo("Başarılı", f"{adet} etiket PDF olarak oluşturuldu ve açıldı.")
 
-    bas_btn = ctk.CTkButton(bas_frame, text="Bas", command=bas)
-    bas_btn.pack(pady=10)
-else:
-    no_personel_label = ctk.CTkLabel(bas_frame, text="Hiç personel tanımlanmamış.")
-    no_personel_label.pack(pady=20)
+bas_btn = ctk.CTkButton(bas_frame, text="Bas", command=bas)
+bas_btn.pack(pady=10)
 
 # Etiket Kontrol Et frame
 geri_btn_kontrol = ctk.CTkButton(kontrol_frame, text="Geri", command=lambda: show_frame(menu_frame))
@@ -366,11 +363,71 @@ kontrol_btn.pack(pady=10)
 info_label = ctk.CTkLabel(kontrol_frame, text="")
 info_label.pack(pady=10)
 
+# Ayarlar frame
+geri_btn_ayarlar = ctk.CTkButton(ayarlar_frame, text="Geri", command=lambda: show_frame(menu_frame))
+geri_btn_ayarlar.pack(anchor="nw", padx=10, pady=10)
+
+ayarlar_title = ctk.CTkLabel(ayarlar_frame, text="Ayarlar", font=ctk.CTkFont(size=16, weight="bold"))
+ayarlar_title.pack(pady=10)
+
+db_label = ctk.CTkLabel(ayarlar_frame, text="Veritabanı Dosyası:")
+db_label.pack(pady=5)
+
+db_entry = ctk.CTkEntry(ayarlar_frame)
+db_entry.insert(0, 'personel.db')
+db_entry.pack(pady=5)
+
+def select_db():
+    file_path = filedialog.asksaveasfilename(defaultextension=".db", filetypes=[("SQLite Database", "*.db")])
+    if file_path:
+        db_entry.delete(0, 'end')
+        db_entry.insert(0, file_path)
+
+select_db_btn = ctk.CTkButton(ayarlar_frame, text="Dosya Seç", command=select_db)
+select_db_btn.pack(pady=5)
+
+def save_settings():
+    global conn, cursor
+    new_db = db_entry.get()
+    if new_db:
+        try:
+            conn.close()
+            conn = sqlite3.connect(new_db)
+            cursor = conn.cursor()
+            # Tablo oluşturma
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS personel (
+                id INTEGER PRIMARY KEY,
+                ad TEXT,
+                soyad TEXT,
+                vardiya TEXT,
+                uuid TEXT UNIQUE,
+                olusturma_tarihi TEXT
+            )
+            ''')
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS etiket (
+                id INTEGER PRIMARY KEY,
+                personel_id INTEGER,
+                uuid TEXT UNIQUE,
+                olusturma_tarihi TEXT,
+                FOREIGN KEY (personel_id) REFERENCES personel (id)
+            )
+            ''')
+            conn.commit()
+            messagebox.showinfo("Başarılı", "Veritabanı güncellendi.")
+        except Exception as e:
+            messagebox.showerror("Hata", f"Veritabanı güncellenirken hata: {str(e)}")
+
+save_btn = ctk.CTkButton(ayarlar_frame, text="Kaydet", command=save_settings)
+save_btn.pack(pady=10)
+
 def show_frame(frame):
     menu_frame.pack_forget()
     personel_frame.pack_forget()
     bas_frame.pack_forget()
     kontrol_frame.pack_forget()
+    ayarlar_frame.pack_forget()
     frame.pack(fill="both", expand=True)
     if frame == bas_frame:
         update_bas_personel()
@@ -387,6 +444,9 @@ bas_btn.pack(pady=10)
 
 kontrol_btn = ctk.CTkButton(menu_frame, text="Etiket Kontrol Et", command=lambda: show_frame(kontrol_frame), fg_color="#FF9900", hover_color="#FFA500")
 kontrol_btn.pack(pady=10)
+
+ayarlar_btn = ctk.CTkButton(menu_frame, text="Ayarlar", command=lambda: show_frame(ayarlar_frame), fg_color="#808080", hover_color="#A9A9A9")
+ayarlar_btn.pack(pady=10)
 
 root.mainloop()
 
