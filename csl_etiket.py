@@ -18,13 +18,15 @@ import threading
 ROL_DISPLAY = {
     'admin': 'Admin',
     'takim_lideri': 'Takım Lideri',
-    'vardiya_amiri': 'Vardiya Amiri'
+    'vardiya_amiri': 'Vardiya Amiri',
+    'kontrol_elemeni': 'Kontrol Elemanı'
 }
 
 ROL_REVERSE = {
     'Admin': 'admin',
     'Takım Lideri': 'takim_lideri',
-    'Vardiya Amiri': 'vardiya_amiri'
+    'Vardiya Amiri': 'vardiya_amiri',
+    'Kontrol Elemanı': 'kontrol_elemeni'
 }
 
 # Veritabanı bağlantısı
@@ -324,6 +326,11 @@ def build_menu():
         
     elif current_user['rol'] == 'vardiya_amiri':
         btn1 = ctk.CTkButton(menu_frame, text="Etiket Bas", command=lambda: show_frame(bas_frame), fg_color="#228B22", hover_color="#006400")
+        btn1.pack(pady=10)
+        menu_buttons.append(btn1)
+        
+    elif current_user['rol'] == 'kontrol_elemeni':
+        btn1 = ctk.CTkButton(menu_frame, text="Etiket Kontrol Et", command=lambda: show_frame(kontrol_frame), fg_color="#FF9900", hover_color="#FFA500")
         btn1.pack(pady=10)
         menu_buttons.append(btn1)
 
@@ -763,6 +770,92 @@ def save_settings():
 save_btn = ctk.CTkButton(ayarlar_frame, text="Kaydet", command=save_settings)
 save_btn.pack(pady=10)
 
+# Şifre Değiştir Bölümü (Sadece Admin)
+sifre_ayar_title = ctk.CTkLabel(ayarlar_frame, text="Şifre Değiştir", font=ctk.CTkFont(size=14, weight="bold"))
+sifre_ayar_title.pack(pady=20)
+
+sifre_form_frame = ctk.CTkFrame(ayarlar_frame)
+sifre_form_frame.pack(pady=10)
+
+eski_sifre_label = ctk.CTkLabel(sifre_form_frame, text="Eski Şifre:")
+eski_sifre_label.grid(row=0, column=0, padx=5, pady=5, sticky="e")
+eski_sifre_entry = ctk.CTkEntry(sifre_form_frame, show="*", width=200)
+eski_sifre_entry.grid(row=0, column=1, padx=5, pady=5)
+
+yeni_sifre_label = ctk.CTkLabel(sifre_form_frame, text="Yeni Şifre:")
+yeni_sifre_label.grid(row=1, column=0, padx=5, pady=5, sticky="e")
+yeni_sifre_entry = ctk.CTkEntry(sifre_form_frame, show="*", width=200)
+yeni_sifre_entry.grid(row=1, column=1, padx=5, pady=5)
+
+yeni_sifre_tekrar_label = ctk.CTkLabel(sifre_form_frame, text="Şifre Tekrar:")
+yeni_sifre_tekrar_label.grid(row=2, column=0, padx=5, pady=5, sticky="e")
+yeni_sifre_tekrar_entry = ctk.CTkEntry(sifre_form_frame, show="*", width=200)
+yeni_sifre_tekrar_entry.grid(row=2, column=1, padx=5, pady=5)
+
+sifre_status_label = ctk.CTkLabel(sifre_form_frame, text="", font=ctk.CTkFont(size=10))
+sifre_status_label.grid(row=3, column=0, columnspan=2, pady=5)
+
+def change_password_thread(eski_sifre, yeni_sifre, yeni_sifre_tekrar):
+    try:
+        if yeni_sifre != yeni_sifre_tekrar:
+            root.after(0, lambda: sifre_status_label.configure(text=""))
+            root.after(0, lambda: messagebox.showerror("Hata", "Yeni şifreler eşleşmiyor!"))
+            return
+        
+        if len(yeni_sifre) < 4:
+            root.after(0, lambda: sifre_status_label.configure(text=""))
+            root.after(0, lambda: messagebox.showerror("Hata", "Şifre en az 4 karakter olmalıdır!"))
+            return
+        
+        eski_sifre_hash = hashlib.sha256(eski_sifre.encode()).hexdigest()
+        cursor.execute("SELECT sifre FROM kullanicilar WHERE id = ?", (current_user['id'],))
+        result = cursor.fetchone()
+        
+        if not result or result[0] != eski_sifre_hash:
+            root.after(0, lambda: sifre_status_label.configure(text=""))
+            root.after(0, lambda: messagebox.showerror("Hata", "Eski şifre yanlış!"))
+            return
+        
+        yeni_sifre_hash = hashlib.sha256(yeni_sifre.encode()).hexdigest()
+        cursor.execute("UPDATE kullanicilar SET sifre = ? WHERE id = ?", 
+                      (yeni_sifre_hash, current_user['id']))
+        conn.commit()
+        
+        root.after(0, lambda: sifre_status_label.configure(text=""))
+        root.after(0, lambda: messagebox.showinfo("Başarılı", "Şifre başarıyla değiştirildi!"))
+        root.after(0, lambda: eski_sifre_entry.delete(0, 'end'))
+        root.after(0, lambda: yeni_sifre_entry.delete(0, 'end'))
+        root.after(0, lambda: yeni_sifre_tekrar_entry.delete(0, 'end'))
+        
+    except Exception as e:
+        root.after(0, lambda: sifre_status_label.configure(text=""))
+        root.after(0, lambda: messagebox.showerror("Hata", f"Şifre değiştirilirken hata: {str(e)}"))
+
+def change_password():
+    eski_sifre = eski_sifre_entry.get()
+    yeni_sifre = yeni_sifre_entry.get()
+    yeni_sifre_tekrar = yeni_sifre_tekrar_entry.get()
+    
+    if not eski_sifre or not yeni_sifre or not yeni_sifre_tekrar:
+        messagebox.showerror("Hata", "Tüm alanları doldurun.")
+        return
+    
+    sifre_status_label.configure(text="⏳ Değiştiriliyor...", text_color="orange")
+    thread = threading.Thread(target=change_password_thread, args=(eski_sifre, yeni_sifre, yeni_sifre_tekrar))
+    thread.daemon = True
+    thread.start()
+
+def clear_password_fields():
+    eski_sifre_entry.delete(0, 'end')
+    yeni_sifre_entry.delete(0, 'end')
+    yeni_sifre_tekrar_entry.delete(0, 'end')
+
+sifre_degistir_btn = ctk.CTkButton(sifre_form_frame, text="Şifre Değiştir", command=change_password)
+sifre_degistir_btn.grid(row=4, column=0, padx=5, pady=10)
+
+sifre_temizle_btn = ctk.CTkButton(sifre_form_frame, text="Temizle", command=clear_password_fields)
+sifre_temizle_btn.grid(row=4, column=1, padx=5, pady=10)
+
 
 # Kullanıcı Yönetimi Frame (Sadece Admin)
 geri_btn_kullanici = ctk.CTkButton(kullanici_yonetimi_frame, text="Geri", command=lambda: show_frame(menu_frame))
@@ -815,7 +908,7 @@ kullanici_password_entry.grid(row=1, column=1, padx=5, pady=5)
 kullanici_rol_label = ctk.CTkLabel(kullanici_add_form_frame, text="Rol:")
 kullanici_rol_label.grid(row=2, column=0, padx=5, pady=5)
 kullanici_rol_var = ctk.StringVar(value="Vardiya Amiri")
-kullanici_rol_combo = ctk.CTkComboBox(kullanici_add_form_frame, values=["Admin", "Takım Lideri", "Vardiya Amiri"], variable=kullanici_rol_var)
+kullanici_rol_combo = ctk.CTkComboBox(kullanici_add_form_frame, values=["Admin", "Takım Lideri", "Vardiya Amiri", "Kontrol Elemanı"], variable=kullanici_rol_var)
 kullanici_rol_combo.grid(row=2, column=1, padx=5, pady=5)
 
 kullanici_status_label = ctk.CTkLabel(kullanici_add_form_frame, text="", font=ctk.CTkFont(size=10))
@@ -905,7 +998,7 @@ kullanici_edit_password_entry.grid(row=1, column=1, padx=5, pady=5)
 kullanici_edit_rol_label = ctk.CTkLabel(kullanici_edit_form_frame, text="Rol:")
 kullanici_edit_rol_label.grid(row=2, column=0, padx=5, pady=5)
 kullanici_edit_rol_var = ctk.StringVar()
-kullanici_edit_rol_combo = ctk.CTkComboBox(kullanici_edit_form_frame, values=["Admin", "Takım Lideri", "Vardiya Amiri"], variable=kullanici_edit_rol_var)
+kullanici_edit_rol_combo = ctk.CTkComboBox(kullanici_edit_form_frame, values=["Admin", "Takım Lideri", "Vardiya Amiri", "Kontrol Elemanı"], variable=kullanici_edit_rol_var)
 kullanici_edit_rol_combo.grid(row=2, column=1, padx=5, pady=5)
 
 def edit_kullanici(id):
