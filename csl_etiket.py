@@ -97,9 +97,8 @@ try:
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_personel_atama_vardiya ON personel_atama(vardiya_amiri_id)")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_personel_atama_personel ON personel_atama(personel_id)")
     conn.commit()
-    print("[OPTIMIZE] Veritabanı index'leri oluşturuldu")
 except Exception as e:
-    print(f"[OPTIMIZE] Index oluşturma hatası (normal): {e}")
+    pass
 
 # Ayarlar tablosu (key-value)
 cursor.execute('''
@@ -131,9 +130,7 @@ if saved_db_path and os.path.exists(saved_db_path) and saved_db_path != initial_
         conn = sqlite3.connect(saved_db_path, check_same_thread=False)
         cursor = conn.cursor()
         db_path = saved_db_path
-        print(f"[DB] Kaydedilmiş DB yolundan açılıyor: {db_path}")
     except Exception as e:
-        print(f"[DB] Kaydedilmiş DB açılamadı, program dizininden devam: {e}")
         # Eski DB'ye geri dön
         conn.close()
         conn = sqlite3.connect(initial_db_path, check_same_thread=False)
@@ -715,7 +712,6 @@ def create_pdf_thread(personel_id, adet):
             tarih = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             thread_cursor.execute("INSERT INTO etiket (personel_id, uuid, olusturma_tarihi, basan_kullanici_id) VALUES (?, ?, ?, ?)",
                            (personel_id, unique_id, tarih, current_user['id']))
-            print(f"[ETIKET] Etiket kaydedildi - UUID: {unique_id}, DB: {db_path}")
             
             qr = qrcode.QRCode(version=5, box_size=10, border=5)
             qr.add_data(unique_id)
@@ -829,14 +825,12 @@ def kontrol():
         messagebox.showerror("Hata", "UUID girin.")
         return
     
-    print(f"[KONTROL] UUID kontrol ediliyor: {uuid_code}, DB: {db_path}")
     cursor.execute("""
         SELECT e.personel_id, e.basan_kullanici_id, e.olusturma_tarihi
         FROM etiket e
         WHERE e.uuid = ?
     """, (uuid_code,))
     etiket_result = cursor.fetchone()
-    print(f"[KONTROL] Sorgu sonucu: {etiket_result}")
     
     if etiket_result:
         personel_id = etiket_result[0]
@@ -917,7 +911,6 @@ def save_settings():
             if not os.path.exists(new_db_dir):
                 try:
                     os.makedirs(new_db_dir, exist_ok=True)
-                    print(f"[DB] Dizin oluşturuldu: {new_db_dir}")
                 except Exception as e:
                     messagebox.showerror("Hata", f"Dizin oluşturulamadı: {new_db_dir}\nHata: {str(e)}")
                     return
@@ -926,9 +919,8 @@ def save_settings():
             # Bu sayede program yeniden başlatıldığında yeni yolu bulabilir
             try:
                 set_setting('db_path', new_db_abs)
-                print(f"[DB] Eski DB'ye yeni yol kaydedildi: {new_db_abs}")
             except Exception as e:
-                print(f"[DB] Eski DB'ye kayıt yazılamadı: {e}")
+                pass
 
             # Eğer yol farklıysa mevcut DB'yi yeni konuma kopyala (OneDrive vb.)
             global db_path
@@ -941,16 +933,13 @@ def save_settings():
                 try:
                     if os.path.exists(db_path):
                         shutil.copy2(db_path, new_db)
-                        print(f"[DB] Mevcut DB kopyalandı: {db_path} -> {new_db}")
                 except Exception as e:
-                    print(f"[DB] Kopyalama başarısız, yeni DB oluşturulacak: {e}")
                     # Kopyalama başarısız olsa da yeni DB üzerinde çalışılacak
                     pass
 
             # Yeni DB'ye bağlan
             conn = sqlite3.connect(new_db, check_same_thread=False)
             cursor = conn.cursor()
-            print(f"[DB] Yeni DB'ye bağlandı: {new_db}")
             cursor.execute('''
             CREATE TABLE IF NOT EXISTS personel (
                 id INTEGER PRIMARY KEY,
@@ -1002,7 +991,6 @@ def save_settings():
             create_default_admin()
             # DB yolunu ayarlara kaydet (bir sonraki startup'ta buradan okunacak)
             set_setting('db_path', os.path.abspath(new_db))
-            print(f"[DB] DB yolu ayarlara kaydedildi: {os.path.abspath(new_db)}")
             messagebox.showinfo("Başarılı", "Veritabanı güncellendi ve kaydedildi.")
             db_path = os.path.abspath(new_db)
         except Exception as e:
@@ -1172,23 +1160,18 @@ def add_kullanici():
 
 def save_kullanici_thread(username, password, rol):
     try:
-        print(f"[DEBUG] Kullanıcı ekleniyor: {username}, Rol: {rol}")
         cursor.execute("SELECT id FROM kullanicilar WHERE kullanici_adi = ?", (username,))
         if cursor.fetchone():
-            print(f"[DEBUG] Kullanıcı zaten mevcut: {username}")
             root.after(0, lambda: kullanici_status_label.configure(text=""))
             root.after(0, lambda: messagebox.showerror("Hata", "Bu kullanıcı adı zaten mevcut."))
             return
         
-        print(f"[DEBUG] Şifre hashleniyor...")
         hashed_password = hashlib.sha256(password.encode()).hexdigest()
         tarih = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        print(f"[DEBUG] Veritabanına ekleniyor...")
         cursor.execute("INSERT INTO kullanicilar (kullanici_adi, sifre, rol, olusturma_tarihi) VALUES (?, ?, ?, ?)",
                        (username, hashed_password, rol, tarih))
         conn.commit()
-        print(f"[DEBUG] Kullanıcı başarıyla eklendi!")
         
         def clear_form():
             kullanici_status_label.configure(text="")
@@ -1201,9 +1184,6 @@ def save_kullanici_thread(username, password, rol):
         
         root.after(0, clear_form)
     except Exception as e:
-        print(f"[ERROR] Kullanıcı eklenirken hata: {str(e)}")
-        import traceback
-        traceback.print_exc()
         root.after(0, lambda: kullanici_status_label.configure(text=""))
         root.after(0, lambda err=str(e): messagebox.showerror("Hata", f"Kullanıcı eklenirken hata: {err}"))
 
@@ -1212,8 +1192,6 @@ def save_kullanici():
     password = kullanici_password_entry.get()
     rol_display = kullanici_rol_var.get()
     rol = ROL_REVERSE.get(rol_display, 'vardiya_amiri')
-    
-    print(f"[DEBUG] save_kullanici çağrıldı: {username}, {rol_display} -> {rol}")
     
     if username and password and rol:
         kullanici_status_label.configure(text="⏳ Ekleniyor...", text_color="orange")
