@@ -695,7 +695,7 @@ def create_pdf_thread(personel_id, adet):
         thread_conn = sqlite3.connect(db_path, check_same_thread=False)
         thread_cursor = thread_conn.cursor()
         
-        # Geçici PDF dosyası oluştur ve yazdırma sonrası sil
+        # Geçici PDF dosyası oluştur
         tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
         tmp_pdf_path = tmp_pdf.name
         tmp_pdf.close()
@@ -733,33 +733,46 @@ def create_pdf_thread(personel_id, adet):
         c.save()
         thread_conn.commit()
 
-        # Yazdır (Linux için lp); yazdırma komutu başarısız olsa bile dosya silinecek
-        try:
-            import subprocess
-            subprocess.run(["lp", tmp_pdf_path], check=True)
-        except Exception:
-            # Eğer yazdırma mümkün değilse, yine de dosyayı açmayı dene (kullanıcı isteyebilir)
+        # PDF'i aç
+        import sys
+        if sys.platform == "win32":
+            os.startfile(tmp_pdf_path)
+            # Windows'ta PDF açılması için bekle (5 saniye)
+            import time
+            time.sleep(5)
+        else:
+            # Linux/Mac için yazdırma komutu dene
             try:
-                import sys
-                if sys.platform == "win32":
-                    os.startfile(tmp_pdf_path)
-                else:
-                    os.system(f"xdg-open '{tmp_pdf_path}'")
+                import subprocess
+                subprocess.run(["lp", tmp_pdf_path], check=True)
             except Exception:
-                pass
+                # Yazdırma başarısız olursa dosyayı aç
+                os.system(f"xdg-open '{tmp_pdf_path}'")
+                import time
+                time.sleep(3)
 
-        # Geçici QR dosyalarını ve PDF'i temizle
+        # Geçici QR dosyalarını temizle (hemen)
         for temp_file in temp_files:
             try:
                 if os.path.exists(temp_file):
                     os.remove(temp_file)
             except Exception:
                 pass
-        try:
-            if os.path.exists(tmp_pdf_path):
-                os.remove(tmp_pdf_path)
-        except Exception:
-            pass
+        
+        # PDF'i gecikmeli temizle (30 saniye sonra)
+        def cleanup_pdf():
+            import time
+            time.sleep(30)  # 30 saniye bekle
+            try:
+                if os.path.exists(tmp_pdf_path):
+                    os.remove(tmp_pdf_path)
+            except Exception:
+                pass
+        
+        # Cleanup thread'i başlat
+        cleanup_thread = threading.Thread(target=cleanup_pdf)
+        cleanup_thread.daemon = True
+        cleanup_thread.start()
         
         # Thread bağlantısını kapat
         try:
