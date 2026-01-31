@@ -13,6 +13,9 @@ from datetime import datetime
 import os
 import hashlib
 import threading
+import tempfile
+import shutil
+import time
 
 # Rol çevirisi
 ROL_DISPLAY = {
@@ -30,7 +33,9 @@ ROL_REVERSE = {
 }
 
 # Veritabanı bağlantısı
-conn = sqlite3.connect('personel.db', check_same_thread=False)
+# İlk kez program dizininde açıp ayarlardan DB yolunu oku
+initial_db_path = os.path.abspath('personel.db')
+conn = sqlite3.connect(initial_db_path, check_same_thread=False)
 cursor = conn.cursor()
 
 # Tablo oluşturma
@@ -96,6 +101,85 @@ try:
 except Exception as e:
     print(f"[OPTIMIZE] Index oluşturma hatası (normal): {e}")
 
+# Ayarlar tablosu (key-value)
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS ayarlar (
+    anahtar TEXT PRIMARY KEY,
+    deger TEXT
+)
+''')
+conn.commit()
+
+# Varsayılan ayarlar
+def get_setting(key, default=None):
+    cursor.execute("SELECT deger FROM ayarlar WHERE anahtar = ?", (key,))
+    r = cursor.fetchone()
+    if r:
+        return r[0]
+    return default
+
+def set_setting(key, value):
+    cursor.execute("INSERT OR REPLACE INTO ayarlar (anahtar, deger) VALUES (?, ?)", (key, str(value)))
+    conn.commit()
+
+# Ayarlardan kaydedilmiş DB yolunu kontrol et; eğer varsa ve mevcut ise, ona taşı
+saved_db_path = get_setting('db_path')
+db_path = initial_db_path
+if saved_db_path and os.path.exists(saved_db_path) and saved_db_path != initial_db_path:
+    try:
+        conn.close()
+        conn = sqlite3.connect(saved_db_path, check_same_thread=False)
+        cursor = conn.cursor()
+        db_path = saved_db_path
+        print(f"[DB] Kaydedilmiş DB yolundan açılıyor: {db_path}")
+    except Exception as e:
+        print(f"[DB] Kaydedilmiş DB açılamadı, program dizininden devam: {e}")
+        # Eski DB'ye geri dön
+        conn.close()
+        conn = sqlite3.connect(initial_db_path, check_same_thread=False)
+        cursor = conn.cursor()
+        db_path = initial_db_path
+
+# Oturum zaman aşımı (saniye) - default 5 dakika
+db_session_timeout = int(get_setting('session_timeout_seconds', 300))
+
+# Global session takip
+session_last_activity = None
+session_monitor_thread = None
+session_monitor_running = False
+
+def touch_session():
+    global session_last_activity
+    session_last_activity = datetime.now()
+
+def session_monitor():
+    global session_monitor_running
+    session_monitor_running = True
+    while session_monitor_running:
+        try:
+            if 'current_user' in globals() and current_user and current_user.get('id'):
+                if session_last_activity:
+                    elapsed = (datetime.now() - session_last_activity).total_seconds()
+                    timeout = int(get_setting('session_timeout_seconds', db_session_timeout))
+                    if elapsed > timeout:
+                        # Oturum kapat
+                        try:
+                            root.after(0, lambda: messagebox.showinfo('Oturum Süresi Doldu', 'Oturumunuz süresi dolduğu için kapatıldı.'))
+                            root.after(0, logout)
+                        except Exception:
+                            pass
+            time.sleep(5)
+        except Exception:
+            time.sleep(5)
+
+# Başlangıçta monitor'u başlat
+def start_session_monitor():
+    global session_monitor_thread
+    if session_monitor_thread and session_monitor_thread.is_alive():
+        return
+    session_monitor_thread = threading.Thread(target=session_monitor, daemon=True)
+    session_monitor_thread.start()
+
 # Varsayılan admin hesabı oluştur
 def create_default_admin():
     cursor.execute("SELECT id FROM kullanicilar WHERE kullanici_adi = 'admin'")
@@ -108,12 +192,16 @@ def create_default_admin():
 
 create_default_admin()
 
+
 # Global kullanıcı bilgisi
 current_user = {
     'id': None,
     'kullanici_adi': None,
     'rol': None
 }
+
+# Start session monitor now that current_user exists
+# session monitor will be started after GUI (root) oluşturuldu
 
 # Ana pencere
 ctk.set_appearance_mode("dark")
@@ -122,6 +210,9 @@ ctk.set_default_color_theme("dark-blue")
 root = ctk.CTk()
 root.title("CSL Etiket Programı")
 root.geometry("600x500")
+
+# Şimdi session monitor'u başlat
+start_session_monitor()
 
 # Frame'ler
 login_frame = ctk.CTkFrame(root)
@@ -150,7 +241,39 @@ personel_atama_frame.pack_forget()
 
 # Kullanıcı bilgisi label (sağ üstte)
 user_info_label = ctk.CTkLabel(root, text="", font=ctk.CTkFont(size=10))
-user_info_label.place(relx=1.0, rely=0.0, anchor="ne", x=-10, y=40)
+user_info_label.place(relx=1.0, rely=0.0, anchor="ne", x=-10, y=60)
+
+countdown_label = ctk.CTkLabel(root, text="", font=ctk.CTkFont(size=9))
+
+# Oturum için geri sayım güncelleyicisi
+def update_countdown():
+    try:
+        if 'current_user' in globals() and current_user and current_user.get('id') and session_last_activity:
+            timeout = int(get_setting('session_timeout_seconds', db_session_timeout))
+            elapsed = (datetime.now() - session_last_activity).total_seconds()
+            remaining = int(timeout - elapsed)
+            if remaining < 0:
+                remaining = 0
+            m = remaining // 60
+            s = remaining % 60
+            countdown_label.configure(text=f"Oturum {m}dk {s}s sonra otomatik kapanacak")
+            if remaining == 0:
+                # Oturum zaten sonlandırılacak; temizle mesaj
+                countdown_label.configure(text="")
+        else:
+            countdown_label.configure(text="")
+    except Exception:
+        pass
+    try:
+        root.after(1000, update_countdown)
+    except Exception:
+        pass
+
+# İlk geri sayımı başlat
+try:
+    update_countdown()
+except Exception:
+    pass
 
 # Çıkış yap butonu
 def logout():
@@ -158,6 +281,10 @@ def logout():
     current_user = {'id': None, 'kullanici_adi': None, 'rol': None}
     user_info_label.configure(text="")
     logout_btn.place_forget()
+    try:
+        countdown_label.place_forget()
+    except Exception:
+        pass
     show_frame(login_frame)
 
 logout_btn = ctk.CTkButton(root, text="Çıkış Yap", command=logout, fg_color="#DC143C", hover_color="#B22222", width=80)
@@ -193,9 +320,13 @@ def do_login_thread(username, password):
             current_user['id'] = user[0]
             current_user['kullanici_adi'] = user[1]
             current_user['rol'] = user[2]
+            # Oturum zamanını güncelle
+            touch_session()
             
             root.after(0, lambda: user_info_label.configure(text=f"Kullanıcı: {current_user['kullanici_adi']} ({ROL_DISPLAY.get(current_user['rol'], current_user['rol'])})"))
             root.after(0, lambda: logout_btn.place(relx=1.0, rely=0.0, anchor="ne", x=-10, y=10))
+            root.after(0, lambda: countdown_label.place(relx=1.0, rely=0.0, anchor="ne", x=-10, y=40))
+            root.after(0, lambda: user_info_label.place(relx=1.0, rely=0.0, anchor="ne", x=-10, y=60))
             root.after(0, lambda: login_username_entry.delete(0, 'end'))
             root.after(0, lambda: login_password_entry.delete(0, 'end'))
             root.after(0, build_menu)
@@ -247,6 +378,10 @@ def update_bas_personel():
         personel_combo.set("")
 
 def show_frame(frame):
+    try:
+        touch_session()
+    except Exception:
+        pass
     login_frame.pack_forget()
     menu_frame.pack_forget()
     personel_frame.pack_forget()
@@ -262,6 +397,8 @@ def show_frame(frame):
         update_bas_personel()
     elif frame == personel_frame:
         refresh_list()
+    elif frame == ayarlar_frame:
+        refresh_db_entry()
     elif frame == kullanici_yonetimi_frame:
         refresh_kullanici_list()
     elif frame == vardiya_amiri_yonetimi_frame:
@@ -557,26 +694,39 @@ bas_status_label.pack(pady=5)
 
 def create_pdf_thread(personel_id, adet):
     try:
-        c = canvas.Canvas("etiketler.pdf", pagesize=(45*mm, 20*mm))
-        temp_files = []
+        # Thread'de çalıştığı için kendi bağlantısını aç (SQLite thread-safe değil)
+        thread_conn = sqlite3.connect(db_path, check_same_thread=False)
+        thread_cursor = thread_conn.cursor()
         
+        # Geçici PDF dosyası oluştur ve yazdırma sonrası sil
+        tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+        tmp_pdf_path = tmp_pdf.name
+        tmp_pdf.close()
+        c = canvas.Canvas(tmp_pdf_path, pagesize=(45*mm, 20*mm))
+        temp_files = []
+
         for i in range(adet):
             while True:
                 unique_id = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
-                cursor.execute("SELECT id FROM etiket WHERE uuid = ?", (unique_id,))
-                if not cursor.fetchone():
+                thread_cursor.execute("SELECT id FROM etiket WHERE uuid = ?", (unique_id,))
+                if not thread_cursor.fetchone():
                     break
             
             tarih = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            cursor.execute("INSERT INTO etiket (personel_id, uuid, olusturma_tarihi, basan_kullanici_id) VALUES (?, ?, ?, ?)",
+            thread_cursor.execute("INSERT INTO etiket (personel_id, uuid, olusturma_tarihi, basan_kullanici_id) VALUES (?, ?, ?, ?)",
                            (personel_id, unique_id, tarih, current_user['id']))
+            print(f"[ETIKET] Etiket kaydedildi - UUID: {unique_id}, DB: {db_path}")
             
             qr = qrcode.QRCode(version=5, box_size=10, border=5)
             qr.add_data(unique_id)
             qr.make(fit=True)
             img = qr.make_image(fill='black', back_color='white')
-            temp_file = f"temp_qr_{i}.png"
-            img.save(temp_file)
+            # Geçici QR görüntüsü
+            tmp_img = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+            tmp_img_path = tmp_img.name
+            tmp_img.close()
+            img.save(tmp_img_path)
+            temp_file = tmp_img_path
             temp_files.append(temp_file)
             c.drawImage(temp_file, 2*mm, 1*mm, width=18*mm, height=18*mm)
             c.setFont("Helvetica", 8)
@@ -585,22 +735,51 @@ def create_pdf_thread(personel_id, adet):
             c.showPage()
         
         c.save()
-        conn.commit()
-        
-        import sys
-        if sys.platform == "win32":
-            os.startfile("etiketler.pdf")
-        else:
-            os.system("xdg-open etiketler.pdf")
-        
+        thread_conn.commit()
+
+        # Yazdır (Linux için lp); yazdırma komutu başarısız olsa bile dosya silinecek
+        try:
+            import subprocess
+            subprocess.run(["lp", tmp_pdf_path], check=True)
+        except Exception:
+            # Eğer yazdırma mümkün değilse, yine de dosyayı açmayı dene (kullanıcı isteyebilir)
+            try:
+                import sys
+                if sys.platform == "win32":
+                    os.startfile(tmp_pdf_path)
+                else:
+                    os.system(f"xdg-open '{tmp_pdf_path}'")
+            except Exception:
+                pass
+
+        # Geçici QR dosyalarını ve PDF'i temizle
         for temp_file in temp_files:
-            if os.path.exists(temp_file):
-                os.remove(temp_file)
+            try:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+            except Exception:
+                pass
+        try:
+            if os.path.exists(tmp_pdf_path):
+                os.remove(tmp_pdf_path)
+        except Exception:
+            pass
+        
+        # Thread bağlantısını kapat
+        try:
+            thread_conn.commit()
+            thread_conn.close()
+        except Exception:
+            pass
         
         root.after(0, lambda: bas_status_label.configure(text="✓ Etiketler başarıyla oluşturuldu!", text_color="green"))
         root.after(3000, lambda: bas_status_label.configure(text=""))
         
     except Exception as e:
+        try:
+            thread_conn.close()
+        except Exception:
+            pass
         root.after(0, lambda: messagebox.showerror("Hata", f"PDF oluşturulurken hata: {str(e)}"))
         root.after(0, lambda: bas_status_label.configure(text=""))
 
@@ -650,12 +829,14 @@ def kontrol():
         messagebox.showerror("Hata", "UUID girin.")
         return
     
+    print(f"[KONTROL] UUID kontrol ediliyor: {uuid_code}, DB: {db_path}")
     cursor.execute("""
         SELECT e.personel_id, e.basan_kullanici_id, e.olusturma_tarihi
         FROM etiket e
         WHERE e.uuid = ?
     """, (uuid_code,))
     etiket_result = cursor.fetchone()
+    print(f"[KONTROL] Sorgu sonucu: {etiket_result}")
     
     if etiket_result:
         personel_id = etiket_result[0]
@@ -701,8 +882,13 @@ db_label = ctk.CTkLabel(ayarlar_frame, text="Veritabanı Dosyası:")
 db_label.pack(pady=5)
 
 db_entry = ctk.CTkEntry(ayarlar_frame, width=300)
-db_entry.insert(0, 'personel.db')
 db_entry.pack(pady=5)
+
+def refresh_db_entry():
+    """Ayarlardan DB yolunu oku ve entry'yi güncelle"""
+    db_entry.delete(0, 'end')
+    saved_path = get_setting('db_path', db_path)
+    db_entry.insert(0, saved_path)
 
 def select_db():
     file_path = filedialog.asksaveasfilename(defaultextension=".db", filetypes=[("SQLite Database", "*.db")])
@@ -716,11 +902,55 @@ select_db_btn.pack(pady=5)
 def save_settings():
     global conn, cursor
     new_db = db_entry.get()
+    # Oturum süresi
+    try:
+        oturum_dk = int(session_timeout_entry.get())
+        set_setting('session_timeout_seconds', oturum_dk * 60)
+    except Exception:
+        pass
+
     if new_db:
         try:
-            conn.close()
+            # Hedef dizini oluştur (yoksa)
+            new_db_abs = os.path.abspath(new_db)
+            new_db_dir = os.path.dirname(new_db_abs)
+            if not os.path.exists(new_db_dir):
+                try:
+                    os.makedirs(new_db_dir, exist_ok=True)
+                    print(f"[DB] Dizin oluşturuldu: {new_db_dir}")
+                except Exception as e:
+                    messagebox.showerror("Hata", f"Dizin oluşturulamadı: {new_db_dir}\nHata: {str(e)}")
+                    return
+
+            # Yeni DB'ye geçmeden ÖNCE, eski DB'ye yeni yolu kaydet (kalıcılık için)
+            # Bu sayede program yeniden başlatıldığında yeni yolu bulabilir
+            try:
+                set_setting('db_path', new_db_abs)
+                print(f"[DB] Eski DB'ye yeni yol kaydedildi: {new_db_abs}")
+            except Exception as e:
+                print(f"[DB] Eski DB'ye kayıt yazılamadı: {e}")
+
+            # Eğer yol farklıysa mevcut DB'yi yeni konuma kopyala (OneDrive vb.)
+            global db_path
+            if os.path.abspath(new_db) != os.path.abspath(db_path):
+                # Önce mevcut bağlantıyı kapat (dosyayı serbest bırakmak için)
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+                try:
+                    if os.path.exists(db_path):
+                        shutil.copy2(db_path, new_db)
+                        print(f"[DB] Mevcut DB kopyalandı: {db_path} -> {new_db}")
+                except Exception as e:
+                    print(f"[DB] Kopyalama başarısız, yeni DB oluşturulacak: {e}")
+                    # Kopyalama başarısız olsa da yeni DB üzerinde çalışılacak
+                    pass
+
+            # Yeni DB'ye bağlan
             conn = sqlite3.connect(new_db, check_same_thread=False)
             cursor = conn.cursor()
+            print(f"[DB] Yeni DB'ye bağlandı: {new_db}")
             cursor.execute('''
             CREATE TABLE IF NOT EXISTS personel (
                 id INTEGER PRIMARY KEY,
@@ -761,14 +991,36 @@ def save_settings():
                 FOREIGN KEY (personel_id) REFERENCES personel (id)
             )
             ''')
+            # Ayarlar tablosunu yeni DB'de oluştur
+            cursor.execute('''
+            CREATE TABLE IF NOT EXISTS ayarlar (
+                anahtar TEXT PRIMARY KEY,
+                deger TEXT
+            )
+            ''')
             conn.commit()
             create_default_admin()
-            messagebox.showinfo("Başarılı", "Veritabanı güncellendi.")
+            # DB yolunu ayarlara kaydet (bir sonraki startup'ta buradan okunacak)
+            set_setting('db_path', os.path.abspath(new_db))
+            print(f"[DB] DB yolu ayarlara kaydedildi: {os.path.abspath(new_db)}")
+            messagebox.showinfo("Başarılı", "Veritabanı güncellendi ve kaydedildi.")
+            db_path = os.path.abspath(new_db)
         except Exception as e:
             messagebox.showerror("Hata", f"Veritabanı güncellenirken hata: {str(e)}")
 
 save_btn = ctk.CTkButton(ayarlar_frame, text="Kaydet", command=save_settings)
 save_btn.pack(pady=10)
+
+# Oturum süresi ayarı (dakika)
+session_timeout_label = ctk.CTkLabel(ayarlar_frame, text="Oturum Süresi (dakika):")
+session_timeout_label.pack(pady=5)
+session_timeout_entry = ctk.CTkEntry(ayarlar_frame, width=100)
+try:
+    current_timeout = int(get_setting('session_timeout_seconds', db_session_timeout))
+    session_timeout_entry.insert(0, str(max(1, current_timeout // 60)))
+except Exception:
+    session_timeout_entry.insert(0, str(5))
+session_timeout_entry.pack(pady=5)
 
 # Şifre Değiştir Bölümü (Sadece Admin)
 sifre_ayar_title = ctk.CTkLabel(ayarlar_frame, text="Şifre Değiştir", font=ctk.CTkFont(size=14, weight="bold"))
