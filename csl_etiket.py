@@ -4,7 +4,7 @@ import qrcode
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import mm
-from PIL import Image
+from PIL import Image, ImageTk
 from tkinter import filedialog, messagebox
 import uuid
 import random
@@ -16,6 +16,8 @@ import threading
 import tempfile
 import shutil
 import time
+import sys
+import subprocess
 
 # Rol çevirisi
 ROL_DISPLAY = {
@@ -689,19 +691,90 @@ adet_entry.pack(pady=5)
 bas_status_label = ctk.CTkLabel(bas_frame, text="", font=ctk.CTkFont(size=12))
 bas_status_label.pack(pady=5)
 
-def create_pdf_thread(personel_id, adet):
+# Yazıcı seçimi
+printer_label = ctk.CTkLabel(bas_frame, text="Yazıcı Seçimi:")
+printer_label.pack(pady=5)
+
+printer_var = ctk.StringVar()
+printer_combo = ctk.CTkComboBox(bas_frame, values=["Yükleniyor..."], variable=printer_var, width=300)
+printer_combo.pack(pady=5)
+
+# Yazıcı ayarları butonu
+def open_printer_settings():
     try:
-        # Thread'de çalıştığı için kendi bağlantısını aç (SQLite thread-safe değil)
+        if sys.platform == "win32":
+            os.system("control printers")
+        else:
+            messagebox.showinfo("Bilgi", "Yazıcı ayarları sadece Windows'ta desteklenmektedir.")
+    except Exception as e:
+        messagebox.showerror("Hata", f"Yazıcı ayarları açılamadı: {str(e)}")
+
+printer_settings_btn = ctk.CTkButton(bas_frame, text="Yazıcı Ayarları", command=open_printer_settings, width=150)
+printer_settings_btn.pack(pady=5)
+
+# Önizleme alanı
+preview_frame = ctk.CTkScrollableFrame(bas_frame, width=500, height=200)
+preview_frame.pack(pady=10, padx=10, fill="both", expand=False)
+
+preview_label = ctk.CTkLabel(preview_frame, text="Etiket önizlemesi burada görünecek", text_color="gray")
+preview_label.pack(pady=20)
+
+# Global değişkenler
+created_labels = []
+preview_images = []
+
+def get_printers():
+    """Sistemdeki yazıcıları listele"""
+    printers = []
+    try:
+        if sys.platform == "win32":
+            # Windows için win32print kullan
+            try:
+                import win32print
+                printer_list = win32print.EnumPrinters(win32print.PRINTER_ENUM_LOCAL | win32print.PRINTER_ENUM_CONNECTIONS)
+                printers = [printer[2] for printer in printer_list]
+                # Varsayılan yazıcıyı en başa ekle
+                default_printer = win32print.GetDefaultPrinter()
+                if default_printer in printers:
+                    printers.remove(default_printer)
+                printers.insert(0, f"{default_printer} (Varsayılan)")
+            except ImportError:
+                # win32print yoksa subprocess kullan
+                result = subprocess.run(['wmic', 'printer', 'get', 'name'], 
+                                      capture_output=True, text=True, shell=True)
+                lines = result.stdout.strip().split('\n')[1:]
+                printers = [line.strip() for line in lines if line.strip()]
+        else:
+            # Linux/Mac için lpstat kullan
+            result = subprocess.run(['lpstat', '-p'], capture_output=True, text=True)
+            lines = result.stdout.strip().split('\n')
+            printers = [line.split()[1] for line in lines if line.startswith('printer')]
+    except Exception as e:
+        printers = ["Varsayılan Yazıcı"]
+    
+    return printers if printers else ["Varsayılan Yazıcı"]
+
+def load_printers_thread():
+    """Yazıcıları arka planda yükle"""
+    printers = get_printers()
+    root.after(0, lambda: printer_combo.configure(values=printers))
+    if printers:
+        root.after(0, lambda: printer_var.set(printers[0]))
+
+# Yazıcıları yükle
+threading.Thread(target=load_printers_thread, daemon=True).start()
+
+def create_labels_thread(personel_id, adet):
+    """Etiketleri oluştur ve önizleme göster"""
+    global created_labels, preview_images
+    try:
         thread_conn = sqlite3.connect(db_path, check_same_thread=False)
         thread_cursor = thread_conn.cursor()
         
-        # Geçici PDF dosyası oluştur
-        tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
-        tmp_pdf_path = tmp_pdf.name
-        tmp_pdf.close()
-        c = canvas.Canvas(tmp_pdf_path, pagesize=(45*mm, 20*mm))
-        temp_files = []
-
+        created_labels = []
+        preview_images = []
+        
+        # Etiketleri oluştur
         for i in range(adet):
             while True:
                 unique_id = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
@@ -713,112 +786,296 @@ def create_pdf_thread(personel_id, adet):
             thread_cursor.execute("INSERT INTO etiket (personel_id, uuid, olusturma_tarihi, basan_kullanici_id) VALUES (?, ?, ?, ?)",
                            (personel_id, unique_id, tarih, current_user['id']))
             
-            qr = qrcode.QRCode(version=5, box_size=10, border=5)
-            qr.add_data(unique_id)
+            etiket_id = thread_cursor.lastrowid
+            created_labels.append({'id': etiket_id, 'uuid': unique_id})
+        
+        thread_conn.commit()
+        thread_conn.close()
+        
+        # İlk 5 etiketi önizle
+        preview_count = min(5, adet)
+        for i in range(preview_count):
+            qr = qrcode.QRCode(version=1, box_size=5, border=2)
+            qr.add_data(created_labels[i]['uuid'])
             qr.make(fit=True)
             img = qr.make_image(fill='black', back_color='white')
+            # PIL Image'i PhotoImage'e çevir
+            img = img.resize((100, 100))
+            preview_images.append(ImageTk.PhotoImage(img))
+        
+        # UI'ı güncelle
+        root.after(0, update_preview_ui, preview_count, adet)
+        
+    except Exception as e:
+        root.after(0, lambda: messagebox.showerror("Hata", f"Etiket oluşturulurken hata: {str(e)}"))
+        root.after(0, lambda: bas_status_label.configure(text=""))
+
+def update_preview_ui(preview_count, total_count):
+    """Önizleme UI'ını güncelle"""
+    global preview_images
+    
+    # Önizleme alanını temizle
+    for widget in preview_frame.winfo_children():
+        widget.destroy()
+    
+    # Başlık
+    title = ctk.CTkLabel(preview_frame, 
+                         text=f"✓ {total_count} etiket oluşturuldu (İlk {preview_count} önizleme):",
+                         font=ctk.CTkFont(size=12, weight="bold"),
+                         text_color="green")
+    title.pack(pady=10)
+    
+    # Önizleme göster
+    for i in range(preview_count):
+        frame = ctk.CTkFrame(preview_frame)
+        frame.pack(pady=5, padx=10, fill="x")
+        
+        # QR kodu
+        qr_label = ctk.CTkLabel(frame, image=preview_images[i], text="")
+        qr_label.image = preview_images[i]  # Referansı tut
+        qr_label.pack(side="left", padx=10)
+        
+        # Etiket bilgisi
+        info_frame = ctk.CTkFrame(frame)
+        info_frame.pack(side="left", padx=10, fill="both", expand=True)
+        
+        uuid_label = ctk.CTkLabel(info_frame, text=f"UUID: {created_labels[i]['uuid']}", 
+                                  font=ctk.CTkFont(size=10))
+        uuid_label.pack(anchor="w", pady=2)
+        
+        text_label = ctk.CTkLabel(info_frame, text="CSL 1\nKontrol OK", 
+                                 font=ctk.CTkFont(size=10))
+        text_label.pack(anchor="w", pady=2)
+    
+    # Butonları aktif et
+    print_btn.configure(state="normal")
+    cancel_btn.configure(state="normal")
+    create_btn.configure(state="disabled")
+    
+    bas_status_label.configure(text="✓ Etiketler hazır! Yazdırmak için 'Yazdır' butonuna basın.", 
+                               text_color="green")
+
+def create_labels():
+    """Etiket oluşturma işlemini başlat"""
+    global personeller, created_labels
+    
+    selected = personel_var.get()
+    if not selected:
+        messagebox.showerror("Hata", "Personel seçin.")
+        return
+    
+    personel_id = None
+    for p in personeller:
+        if f"{p[0]} {p[1]}" == selected:
+            personel_id = p[2]
+            break
+    
+    adet = adet_entry.get()
+    try:
+        adet = int(adet)
+        if adet <= 0:
+            raise ValueError()
+    except:
+        messagebox.showerror("Hata", "Geçerli adet girin.")
+        return
+    
+    # Önceki etiketleri temizle
+    created_labels = []
+    
+    bas_status_label.configure(text="⏳ Etiketler oluşturuluyor...", text_color="orange")
+    create_btn.configure(state="disabled")
+    
+    # Thread'de çalıştır
+    thread = threading.Thread(target=create_labels_thread, args=(personel_id, adet))
+    thread.daemon = True
+    thread.start()
+
+def print_labels_thread():
+    """Etiketleri yazdır"""
+    global created_labels
+    
+    try:
+        # Seçili yazıcıyı al
+        selected_printer = printer_var.get()
+        if "(Varsayılan)" in selected_printer:
+            selected_printer = selected_printer.replace(" (Varsayılan)", "")
+        
+        # Geçici PDF oluştur
+        tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+        tmp_pdf_path = tmp_pdf.name
+        tmp_pdf.close()
+        
+        c = canvas.Canvas(tmp_pdf_path, pagesize=(45*mm, 20*mm))
+        temp_qr_files = []
+        
+        # Her etiket için PDF sayfası oluştur
+        for label in created_labels:
+            qr = qrcode.QRCode(version=5, box_size=10, border=5)
+            qr.add_data(label['uuid'])
+            qr.make(fit=True)
+            img = qr.make_image(fill='black', back_color='white')
+            
             # Geçici QR görüntüsü
             tmp_img = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
             tmp_img_path = tmp_img.name
             tmp_img.close()
             img.save(tmp_img_path)
-            temp_file = tmp_img_path
-            temp_files.append(temp_file)
-            c.drawImage(temp_file, 2*mm, 1*mm, width=18*mm, height=18*mm)
+            temp_qr_files.append(tmp_img_path)
+            
+            # PDF'e ekle
+            c.drawImage(tmp_img_path, 2*mm, 1*mm, width=18*mm, height=18*mm)
             c.setFont("Helvetica", 8)
             c.drawString(25*mm, 7*mm, "CSL 1")
             c.drawString(25*mm, 3*mm, "Kontrol OK")
             c.showPage()
         
         c.save()
-        thread_conn.commit()
-
-        # PDF'i aç
-        import sys
+        
+        # Yazdır
         if sys.platform == "win32":
-            os.startfile(tmp_pdf_path)
-            # Windows'ta PDF açılması için bekle (5 saniye)
-            import time
-            time.sleep(5)
+            try:
+                import win32print
+                import win32api
+                
+                # Seçili yazıcıya gönder
+                win32api.ShellExecute(
+                    0,
+                    "print",
+                    tmp_pdf_path,
+                    f'/d:"{selected_printer}"',
+                    ".",
+                    0
+                )
+            except ImportError:
+                # win32print yoksa varsayılan yazıcıya gönder
+                os.startfile(tmp_pdf_path, "print")
         else:
-            # Linux/Mac için yazdırma komutu dene
+            # Linux/Mac için lp komutu
+            subprocess.run(["lp", "-d", selected_printer, tmp_pdf_path], check=True)
+        
+        # Yazdırma kuyruğuna girmesi için kısa bekle
+        time.sleep(1)
+        
+        # Geçici dosyaları temizle
+        for qr_file in temp_qr_files:
             try:
-                import subprocess
-                subprocess.run(["lp", tmp_pdf_path], check=True)
-            except Exception:
-                # Yazdırma başarısız olursa dosyayı aç
-                os.system(f"xdg-open '{tmp_pdf_path}'")
-                import time
-                time.sleep(3)
-
-        # Geçici QR dosyalarını temizle (hemen)
-        for temp_file in temp_files:
-            try:
-                if os.path.exists(temp_file):
-                    os.remove(temp_file)
-            except Exception:
+                if os.path.exists(qr_file):
+                    os.remove(qr_file)
+            except:
                 pass
         
-        # PDF'i gecikmeli temizle (30 saniye sonra)
-        def cleanup_pdf():
-            import time
-            time.sleep(30)  # 30 saniye bekle
-            try:
-                if os.path.exists(tmp_pdf_path):
-                    os.remove(tmp_pdf_path)
-            except Exception:
-                pass
-        
-        # Cleanup thread'i başlat
-        cleanup_thread = threading.Thread(target=cleanup_pdf)
-        cleanup_thread.daemon = True
-        cleanup_thread.start()
-        
-        # Thread bağlantısını kapat
         try:
-            thread_conn.commit()
-            thread_conn.close()
-        except Exception:
+            if os.path.exists(tmp_pdf_path):
+                os.remove(tmp_pdf_path)
+        except:
             pass
         
-        root.after(0, lambda: bas_status_label.configure(text="✓ Etiketler başarıyla oluşturuldu!", text_color="green"))
+        # Başarılı
+        root.after(0, lambda: bas_status_label.configure(
+            text="✓ Etiketler yazdırıldı!", text_color="green"))
+        root.after(0, reset_print_ui)
         root.after(3000, lambda: bas_status_label.configure(text=""))
         
     except Exception as e:
-        try:
-            thread_conn.close()
-        except Exception:
-            pass
-        root.after(0, lambda: messagebox.showerror("Hata", f"PDF oluşturulurken hata: {str(e)}"))
+        root.after(0, lambda: messagebox.showerror("Hata", f"Yazdırma hatası: {str(e)}"))
         root.after(0, lambda: bas_status_label.configure(text=""))
+        root.after(0, lambda: print_btn.configure(state="normal"))
 
-def bas():
-    global personeller
-    selected = personel_var.get()
-    if not selected:
-        messagebox.showerror("Hata", "Personel seçin.")
-        return
-    personel_id = None
-    for p in personeller:
-        if f"{p[0]} {p[1]}" == selected:
-            personel_id = p[2]
-            break
-    adet = adet_entry.get()
-    try:
-        adet = int(adet)
-    except:
-        messagebox.showerror("Hata", "Geçerli adet girin.")
+def print_labels():
+    """Yazdırma işlemini başlat"""
+    global created_labels
+    
+    if not created_labels:
+        messagebox.showerror("Hata", "Önce etiket oluşturun.")
         return
     
-    bas_status_label.configure(text="⏳ Etiketler oluşturuluyor...", text_color="orange")
+    bas_status_label.configure(text="⏳ Yazdırılıyor...", text_color="orange")
+    print_btn.configure(state="disabled")
+    cancel_btn.configure(state="disabled")
     
     # Thread'de çalıştır
-    thread = threading.Thread(target=create_pdf_thread, args=(personel_id, adet))
+    thread = threading.Thread(target=print_labels_thread)
     thread.daemon = True
     thread.start()
 
-bas_btn = ctk.CTkButton(bas_frame, text="Bas", command=bas)
-bas_btn.pack(pady=10)
+def cancel_labels_thread():
+    """Oluşturulan etiketleri iptal et"""
+    global created_labels
+    
+    try:
+        thread_conn = sqlite3.connect(db_path, check_same_thread=False)
+        thread_cursor = thread_conn.cursor()
+        
+        # Etiketleri sil
+        for label in created_labels:
+            thread_cursor.execute("DELETE FROM etiket WHERE id = ?", (label['id'],))
+        
+        thread_conn.commit()
+        thread_conn.close()
+        
+        root.after(0, lambda: bas_status_label.configure(
+            text="✓ Etiketler iptal edildi.", text_color="orange"))
+        root.after(0, reset_print_ui)
+        root.after(3000, lambda: bas_status_label.configure(text=""))
+        
+    except Exception as e:
+        root.after(0, lambda: messagebox.showerror("Hata", f"İptal hatası: {str(e)}"))
+        root.after(0, lambda: bas_status_label.configure(text=""))
+
+def cancel_labels():
+    """İptal işlemini başlat"""
+    global created_labels
+    
+    if not created_labels:
+        return
+    
+    result = messagebox.askyesno("Onay", "Oluşturulan etiketler silinecek. Emin misiniz?")
+    if not result:
+        return
+    
+    bas_status_label.configure(text="⏳ İptal ediliyor...", text_color="orange")
+    cancel_btn.configure(state="disabled")
+    print_btn.configure(state="disabled")
+    
+    # Thread'de çalıştır
+    thread = threading.Thread(target=cancel_labels_thread)
+    thread.daemon = True
+    thread.start()
+
+def reset_print_ui():
+    """Yazdırma UI'ını sıfırla"""
+    global created_labels, preview_images
+    
+    created_labels = []
+    preview_images = []
+    
+    # Önizleme alanını temizle
+    for widget in preview_frame.winfo_children():
+        widget.destroy()
+    
+    preview_label = ctk.CTkLabel(preview_frame, text="Etiket önizlemesi burada görünecek", 
+                                text_color="gray")
+    preview_label.pack(pady=20)
+    
+    # Butonları sıfırla
+    create_btn.configure(state="normal")
+    print_btn.configure(state="disabled")
+    cancel_btn.configure(state="disabled")
+
+# Butonlar
+button_frame = ctk.CTkFrame(bas_frame)
+button_frame.pack(pady=10)
+
+create_btn = ctk.CTkButton(button_frame, text="Etiket Oluştur", command=create_labels, width=150)
+create_btn.pack(side="left", padx=5)
+
+print_btn = ctk.CTkButton(button_frame, text="Yazdır", command=print_labels, 
+                         width=150, state="disabled")
+print_btn.pack(side="left", padx=5)
+
+cancel_btn = ctk.CTkButton(button_frame, text="İptal", command=cancel_labels, 
+                          width=150, state="disabled", fg_color="red", hover_color="darkred")
+cancel_btn.pack(side="left", padx=5)
 
 # Etiket Kontrol Et frame
 geri_btn_kontrol = ctk.CTkButton(kontrol_frame, text="Geri", command=lambda: show_frame(menu_frame))

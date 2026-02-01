@@ -35,6 +35,7 @@ pip install customtkinter
 pip install pillow
 pip install qrcode
 pip install reportlab
+pip install pywin32
 
 # 3. Paketleme aracını kurun
 pip install pyinstaller
@@ -47,6 +48,7 @@ Beklenen çıktıda şunlar olmalı:
 - Pillow
 - qrcode
 - reportlab
+- pywin32 (Windows yazıcı kontrolü için)
 - pyinstaller
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -152,6 +154,12 @@ SORUN 5: Veritabanı hatası
 - Program ilk çalıştırmada personel.db otomatik oluşturur
 - Eğer sorun devam ederse, eski personel.db'yi silin
 
+SORUN 6: Yazıcı listesi görünmüyor
+ÇÖZÜM:
+- pywin32 paketinin kurulu olduğundan emin olun
+- Windows yazıcı servisinin çalıştığını kontrol edin
+- En az bir yazıcı tanımlı olmalı (fiziksel veya sanal)
+
 
 ═══════════════════════════════════════════════════════════════════════════════
 GELİŞMİŞ PAKETLEME SEÇENEKLERİ
@@ -180,7 +188,7 @@ HIZLI BAŞLANGIÇ KOMUTLARI (KOPYALA-YAPIŞTIR)
 
 # Tüm kurulum (tek seferde):
 python -m pip install --upgrade pip
-pip install customtkinter pillow qrcode reportlab pyinstaller
+pip install customtkinter pillow qrcode reportlab pywin32 pyinstaller
 
 # Paketleme (tek komut):
 pyinstaller --onefile --windowed --name="CSL_Etiket" csl_etiket.py
@@ -232,8 +240,8 @@ GÜVENLİK İPUÇLARI:
 DESTEK VE GÜNCELLEMELER
 ═══════════════════════════════════════════════════════════════════════════════
 
-Program Versiyonu: 2.0
-Son Güncelleme: 2026-01-28
+Program Versiyonu: 3.0
+Son Güncelleme: 2026-02-01
 
 Özellikler:
 ✓ Kullanıcı yönetimi (Admin, Takım Lideri, Vardiya Amiri)
@@ -245,6 +253,10 @@ Son Güncelleme: 2026-01-28
 ✓ Thread-based performans optimizasyonu
 ✓ Widget caching
 ✓ Veritabanı indexleme
+✓ YENİ: Yazıcı seçimi (Zebra desteği)
+✓ YENİ: Etiket önizleme sistemi
+✓ YENİ: Windows yazıcı ayarlarına erişim
+✓ YENİ: Güvenli PDF yönetimi (otomatik silme)
 
 ═══════════════════════════════════════════════════════════════════════════════
 SONU

@@ -1,0 +1,384 @@
+═══════════════════════════════════════════════════════════════════════════════
+    ETİKET BASMA VE PDF OTOMATİK SİLME SÜRECİ - DETAYLI AÇIKLAMA
+═══════════════════════════════════════════════════════════════════════════════
+
+Bu dokümant, etiket basma işlemi sırasında PDF'in nasıl oluşturulduğunu,
+açıldığını ve otomatik olarak silindiğini adım adım açıklar.
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 1: KULLANICI ETİKET BASMAK İSTER
+═══════════════════════════════════════════════════════════════════════════════
+
+Kullanıcı:
+1. "Etiket Bas" menüsüne gider
+2. Personel seçer (örn: "Ahmet Yılmaz")
+3. Adet girer (örn: 10)
+4. "Bas" butonuna tıklar
+
+Program:
+→ Loading göstergesi gösterir: "⏳ Etiketler oluşturuluyor..."
+→ Arka planda bir thread başlatır (UI donmaz)
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 2: GEÇİCİ PDF DOSYASI OLUŞTURULUR
+═══════════════════════════════════════════════════════════════════════════════
+
+Thread içinde:
+
+1. GEÇİCİ PDF DOSYASI OLUŞTUR:
+   ```python
+   tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+   tmp_pdf_path = tmp_pdf.name
+   ```
+   
+   Örnek yol:
+   Windows: C:\Users\KULLANICI\AppData\Local\Temp\tmp8x9y2z3a.pdf
+   
+   ÖNEMLİ: delete=False → Dosya hemen silinmez, biz kontrol ederiz
+
+2. PDF CANVAS OLUŞTUR:
+   ```python
+   c = canvas.Canvas(tmp_pdf_path, pagesize=(45*mm, 20*mm))
+   ```
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 3: HER ETİKET İÇİN QR KOD OLUŞTURULUR
+═══════════════════════════════════════════════════════════════════════════════
+
+Her etiket için (örn: 10 kez):
+
+1. BENZERSİZ UUID OLUŞTUR:
+   unique_id = "aB3xY9mK2p" (10 karakter)
+
+2. VERİTABANINA KAYDET:
+   - Personel ID
+   - UUID
+   - Tarih
+   - Basan kullanıcı ID
+
+3. QR KOD OLUŞTUR:
+   ```python
+   qr = qrcode.QRCode(...)
+   qr.add_data(unique_id)
+   img = qr.make_image()
+   ```
+
+4. GEÇİCİ QR DOSYASI OLUŞTUR:
+   ```python
+   tmp_img = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+   tmp_img_path = tmp_img.name
+   img.save(tmp_img_path)
+   ```
+   
+   Örnek: C:\Users\KULLANICI\AppData\Local\Temp\tmp1a2b3c4d.png
+
+5. QR'I PDF'E EKLE:
+   ```python
+   c.drawImage(tmp_img_path, 2*mm, 1*mm, width=18*mm, height=18*mm)
+   c.drawString(25*mm, 7*mm, "CSL 1")
+   c.drawString(25*mm, 3*mm, "Kontrol OK")
+   c.showPage()  # Yeni sayfa
+   ```
+
+6. GEÇİCİ QR DOSYASINI LİSTEYE EKLE:
+   temp_files.append(tmp_img_path)
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 4: PDF KAYDEDILIR
+═══════════════════════════════════════════════════════════════════════════════
+
+Tüm etiketler eklendikten sonra:
+
+```python
+c.save()  # PDF dosyası diske yazılır
+```
+
+Şu anda elimizde:
+✓ 1 adet PDF dosyası (tmp8x9y2z3a.pdf)
+✓ 10 adet QR PNG dosyası (tmp1a2b3c4d.png, tmp2e3f4g5h.png, ...)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 5: PDF AÇILIR (PLATFORM'A GÖRE)
+═══════════════════════════════════════════════════════════════════════════════
+
+WINDOWS'TA:
+```python
+if sys.platform == "win32":
+    os.startfile(tmp_pdf_path)
+    # Windows'ta PDF açılması için bekle (5 saniye)
+    import time
+    time.sleep(5)
+```
+
+Ne olur:
+1. Windows varsayılan PDF okuyucusu açılır (Adobe Reader, Edge, vb.)
+2. PDF dosyası okuyucuda yüklenir
+3. Program 5 saniye bekler (PDF'in tamamen açılması için)
+
+NEDEN 5 SANİYE BEKLEME?
+- os.startfile() komutu ASENKRON çalışır
+- Yani komut hemen geri döner, ama PDF henüz açılmamış olabilir
+- 5 saniye bekleme, PDF'in tamamen açılmasını garanti eder
+
+LINUX/MAC'TE:
+```python
+else:
+    os.system(f"xdg-open '{tmp_pdf_path}'")
+    time.sleep(3)
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 6: QR DOSYALARI HEMEN SİLİNİR
+═══════════════════════════════════════════════════════════════════════════════
+
+PDF açıldıktan sonra, QR PNG dosyaları artık gerekli değil:
+
+```python
+for temp_file in temp_files:
+    try:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+    except Exception:
+        pass
+```
+
+Silinen dosyalar:
+❌ tmp1a2b3c4d.png
+❌ tmp2e3f4g5h.png
+❌ tmp3i4j5k6l.png
+... (10 adet)
+
+NEDEN HEMEN SİLİNİR?
+- QR kodları zaten PDF'e gömülmüş durumda
+- PNG dosyaları artık gereksiz
+- Disk alanı tasarrufu
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 7: PDF GECİKMELİ SİLME (30 SANİYE SONRA)
+═══════════════════════════════════════════════════════════════════════════════
+
+PDF dosyası HEMEN silinmez, çünkü:
+- Kullanıcı PDF'i görüyor olabilir
+- Kullanıcı PDF'i yazdırıyor olabilir
+- Kullanıcı PDF'i başka yere kaydetmek isteyebilir
+
+Bunun yerine, AYRI BİR THREAD başlatılır:
+
+```python
+def cleanup_pdf():
+    import time
+    time.sleep(30)  # 30 saniye bekle
+    try:
+        if os.path.exists(tmp_pdf_path):
+            os.remove(tmp_pdf_path)
+    except Exception:
+        pass
+
+cleanup_thread = threading.Thread(target=cleanup_pdf)
+cleanup_thread.daemon = True
+cleanup_thread.start()
+```
+
+ZAMAN ÇİZELGESİ:
+T=0s   : PDF açılır
+T=5s   : QR dosyaları silinir
+T=30s  : PDF dosyası silinir (cleanup thread tarafından)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 8: CLEANUP THREAD NASIL ÇALIŞIR?
+═══════════════════════════════════════════════════════════════════════════════
+
+CLEANUP THREAD ÖZELLİKLERİ:
+
+1. DAEMON THREAD:
+   ```python
+   cleanup_thread.daemon = True
+   ```
+   
+   Ne demek?
+   - Ana program kapanırsa, bu thread de otomatik kapanır
+   - Kullanıcı programı kapatsa bile sorun olmaz
+   - Thread "arka planda" çalışır
+
+2. BAĞIMSIZ ÇALIŞIR:
+   - Ana thread (UI) ile etkileşime girmez
+   - Kullanıcı başka işlemler yapabilir
+   - Program donmaz
+
+3. 30 SANİYE BEKLER:
+   ```python
+   time.sleep(30)
+   ```
+   
+   Bu süre içinde kullanıcı:
+   ✓ PDF'i görüntüleyebilir
+   ✓ PDF'i yazdırabilir
+   ✓ PDF'i başka yere kaydedebilir
+   ✓ PDF'i kapatabilir
+
+4. DOSYAYI SİLER:
+   ```python
+   if os.path.exists(tmp_pdf_path):
+       os.remove(tmp_pdf_path)
+   ```
+   
+   Eğer dosya hala açıksa (Windows'ta):
+   - Silme başarısız olur (exception)
+   - Exception yakalanır ve görmezden gelinir
+   - Dosya açık kaldığı sürece silinmez
+
+═══════════════════════════════════════════════════════════════════════════════
+SENARYO ÖRNEKLERİ
+═══════════════════════════════════════════════════════════════════════════════
+
+SENARYO 1: Normal Kullanım
+─────────────────────────────
+T=0s   : Kullanıcı "Bas" butonuna tıklar
+T=2s   : PDF oluşturulur ve açılır
+T=5s   : QR PNG dosyaları silinir
+T=10s  : Kullanıcı PDF'i görüntüler
+T=20s  : Kullanıcı PDF'i kapatır
+T=30s  : PDF dosyası silinir ✓
+
+SENARYO 2: Kullanıcı PDF'i Uzun Süre Açık Tutar
+─────────────────────────────────────────────────
+T=0s   : Kullanıcı "Bas" butonuna tıklar
+T=2s   : PDF oluşturulur ve açılır
+T=5s   : QR PNG dosyaları silinir
+T=30s  : Cleanup thread PDF'i silmeye çalışır
+        → BAŞARISIZ (dosya hala açık)
+        → Exception yakalanır, görmezden gelinir
+T=60s  : Kullanıcı PDF'i kapatır
+        → PDF dosyası disk'te kalır (manuel silinmeli)
+
+SENARYO 3: Kullanıcı Programı Hemen Kapatır
+─────────────────────────────────────────────
+T=0s   : Kullanıcı "Bas" butonuna tıklar
+T=2s   : PDF oluşturulur ve açılır
+T=5s   : Kullanıcı programı kapatır
+        → Cleanup thread otomatik sonlanır (daemon)
+        → PDF dosyası disk'te kalır
+        → QR dosyaları zaten silinmiş
+
+SENARYO 4: Kullanıcı PDF'i Başka Yere Kaydeder
+────────────────────────────────────────────────
+T=0s   : Kullanıcı "Bas" butonuna tıklar
+T=2s   : PDF oluşturulur ve açılır
+T=10s  : Kullanıcı "Farklı Kaydet" yapar
+        → Masaüstü\etiketler_yedek.pdf
+T=15s  : Kullanıcı PDF'i kapatır
+T=30s  : Geçici PDF silinir ✓
+        → Kullanıcının kaydettiği kopya kalır ✓
+
+
+═══════════════════════════════════════════════════════════════════════════════
+GÜVENLİK VE GİZLİLİK
+═══════════════════════════════════════════════════════════════════════════════
+
+NEDEN GEÇİCİ DOSYALAR OTOMATİK SİLİNİR?
+
+1. GİZLİLİK:
+   - Etiketlerde personel bilgileri var
+   - QR kodlar benzersiz ve hassas
+   - Geçici dosyalar başkaları tarafından görülebilir
+
+2. DİSK ALANI:
+   - Her etiket basımı ~1-2 MB dosya oluşturur
+   - Günde 100 basım = 100-200 MB
+   - Ayda 3000 basım = 3-6 GB gereksiz dosya
+
+3. KARMAŞA ÖNLEME:
+   - Temp klasörü dolmaz
+   - Kullanıcı karışmaz
+   - Sistem temiz kalır
+
+GEÇİCİ DOSYA KONUMLARI:
+
+Windows:
+C:\Users\KULLANICI\AppData\Local\Temp\tmpXXXXXXXX.pdf
+C:\Users\KULLANICI\AppData\Local\Temp\tmpXXXXXXXX.png
+
+Linux:
+/tmp/tmpXXXXXXXX.pdf
+/tmp/tmpXXXXXXXX.png
+
+macOS:
+/var/folders/xx/xxxxxxxxxx/T/tmpXXXXXXXX.pdf
+
+═══════════════════════════════════════════════════════════════════════════════
+SORUN GİDERME
+═══════════════════════════════════════════════════════════════════════════════
+
+SORUN 1: PDF açılmıyor
+NEDEN: PDF henüz oluşmadan silinmeye çalışılıyor
+ÇÖZÜM: 5 saniye bekleme süresi eklendi ✓
+
+SORUN 2: PDF 30 saniye sonra hala duruyor
+NEDEN: Kullanıcı PDF'i hala açık tutuyor
+ÇÖZÜM: Normal davranış, kullanıcı kapatınca silinebilir
+
+SORUN 3: Temp klasörü doldu
+NEDEN: Cleanup thread çalışmıyor veya dosyalar açık kalıyor
+ÇÖZÜM: 
+- Bilgisayarı yeniden başlatın (temp klasörü temizlenir)
+- Manuel olarak C:\Users\KULLANICI\AppData\Local\Temp\ temizleyin
+
+SORUN 4: "Dosya kullanımda" hatası
+NEDEN: PDF hala açık
+ÇÖZÜM: Normal davranış, exception yakalanır
+
+═══════════════════════════════════════════════════════════════════════════════
+KOD AKIŞI ÖZETİ
+═══════════════════════════════════════════════════════════════════════════════
+
+1. KULLANICI TIKLAMA
+   ↓
+2. THREAD BAŞLAT (UI donmaz)
+   ↓
+3. GEÇİCİ PDF OLUŞTUR (tempfile)
+   ↓
+4. HER ETİKET İÇİN:
+   - UUID oluştur
+   - Veritabanına kaydet
+   - QR kod oluştur
+   - Geçici PNG kaydet
+   - PDF'e ekle
+   ↓
+5. PDF'İ KAYDET
+   ↓
+6. PDF'İ AÇ (os.startfile)
+   ↓
+7. 5 SANİYE BEKLE (PDF açılsın)
+   ↓
+8. QR PNG DOSYALARINI SİL (hemen)
+   ↓
+9. CLEANUP THREAD BAŞLAT
+   ↓
+10. 30 SANİYE BEKLE (arka planda)
+    ↓
+11. PDF'İ SİL (eğer mümkünse)
+
+═══════════════════════════════════════════════════════════════════════════════
+PERFORMANS
+═══════════════════════════════════════════════════════════════════════════════
+
+10 ETİKET İÇİN SÜRE:
+- PDF oluşturma: ~1-2 saniye
+- QR kod oluşturma: ~0.5 saniye
+- PDF açma: ~1 saniye
+- Toplam: ~3 saniye
+
+100 ETİKET İÇİN SÜRE:
+- PDF oluşturma: ~5-8 saniye
+- QR kod oluşturma: ~3 saniye
+- PDF açma: ~1 saniye
+- Toplam: ~10 saniye
+
+BELLEK KULLANIMI:
+- Her QR kod: ~50 KB
+- 10 etiket: ~500 KB
+- 100 etiket: ~5 MB
+- PDF: ~1-2 MB
+
