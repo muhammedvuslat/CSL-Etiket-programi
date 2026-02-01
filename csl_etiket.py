@@ -208,7 +208,7 @@ ctk.set_default_color_theme("dark-blue")
 
 root = ctk.CTk()
 root.title("CSL Etiket Programı")
-root.geometry("600x500")
+root.geometry("800x700")
 
 # Şimdi session monitor'u başlat
 start_session_monitor()
@@ -946,15 +946,17 @@ def print_labels_thread():
                     ".",
                     0
                 )
+                # Windows'ta yazdırma kuyruğuna girmesi için bekle
+                time.sleep(3)
             except ImportError:
                 # win32print yoksa varsayılan yazıcıya gönder
                 os.startfile(tmp_pdf_path, "print")
+                # Yazdırma işlemi için bekle
+                time.sleep(3)
         else:
             # Linux/Mac için lp komutu
             subprocess.run(["lp", "-d", selected_printer, tmp_pdf_path], check=True)
-        
-        # Yazdırma kuyruğuna girmesi için kısa bekle
-        time.sleep(1)
+            time.sleep(2)
         
         # Geçici dosyaları temizle
         for qr_file in temp_qr_files:
