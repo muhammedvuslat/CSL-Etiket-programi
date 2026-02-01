@@ -353,6 +353,97 @@ login_btn.grid(row=2, column=0, columnspan=2, pady=20)
 # Enter tuşu ile giriş
 login_password_entry.bind('<Return>', lambda e: do_login())
 
+# İletişim butonu ve popup
+def show_contact_popup():
+    import webbrowser
+    
+    popup = ctk.CTkToplevel(root)
+    popup.title("İletişim")
+    popup.geometry("400x250")
+    popup.resizable(False, False)
+    
+    # Popup'ı merkeze al
+    popup.update_idletasks()
+    x = (popup.winfo_screenwidth() // 2) - (400 // 2)
+    y = (popup.winfo_screenheight() // 2) - (250 // 2)
+    popup.geometry(f"400x250+{x}+{y}")
+    
+    # Başlık
+    title = ctk.CTkLabel(popup, text="İletişim Bilgileri", font=ctk.CTkFont(size=18, weight="bold"))
+    title.pack(pady=20)
+    
+    # GitHub
+    github_frame = ctk.CTkFrame(popup, fg_color="transparent")
+    github_frame.pack(pady=10, padx=20, fill="x")
+    
+    github_icon = ctk.CTkLabel(github_frame, text="🔗", font=ctk.CTkFont(size=20))
+    github_icon.pack(side="left", padx=5)
+    
+    github_btn = ctk.CTkButton(
+        github_frame, 
+        text="GitHub: muhammedvuslat",
+        command=lambda: webbrowser.open("https://github.com/muhammedvuslat"),
+        fg_color="#24292e",
+        hover_color="#1a1e22",
+        width=300
+    )
+    github_btn.pack(side="left", padx=5)
+    
+    # Email
+    email_frame = ctk.CTkFrame(popup, fg_color="transparent")
+    email_frame.pack(pady=10, padx=20, fill="x")
+    
+    email_icon = ctk.CTkLabel(email_frame, text="📧", font=ctk.CTkFont(size=20))
+    email_icon.pack(side="left", padx=5)
+    
+    email_btn = ctk.CTkButton(
+        email_frame,
+        text="Email: v.sltcevikev@gmail.com",
+        command=lambda: webbrowser.open("mailto:v.sltcevikev@gmail.com"),
+        fg_color="#D44638",
+        hover_color="#B23121",
+        width=300
+    )
+    email_btn.pack(side="left", padx=5)
+    
+    # LinkedIn
+    linkedin_frame = ctk.CTkFrame(popup, fg_color="transparent")
+    linkedin_frame.pack(pady=10, padx=20, fill="x")
+    
+    linkedin_icon = ctk.CTkLabel(linkedin_frame, text="💼", font=ctk.CTkFont(size=20))
+    linkedin_icon.pack(side="left", padx=5)
+    
+    linkedin_btn = ctk.CTkButton(
+        linkedin_frame,
+        text="LinkedIn: m-vuslat-cevik",
+        command=lambda: webbrowser.open("https://www.linkedin.com/in/m-vuslat-cevik"),
+        fg_color="#0077B5",
+        hover_color="#005885",
+        width=300
+    )
+    linkedin_btn.pack(side="left", padx=5)
+    
+    # Kapat butonu
+    close_btn = ctk.CTkButton(popup, text="Kapat", command=popup.destroy, width=100)
+    close_btn.pack(pady=20)
+    
+    # Popup'ı modal yap
+    popup.transient(root)
+    popup.grab_set()
+
+# İletişim butonu (login frame'in en altına)
+contact_btn = ctk.CTkButton(
+    login_frame, 
+    text="📞 İletişim",
+    command=show_contact_popup,
+    fg_color="transparent",
+    hover_color="#2B2B2B",
+    border_width=1,
+    width=100,
+    height=30
+)
+contact_btn.pack(side="bottom", pady=10)
+
 # Fonksiyonlar
 personeller = []
 def update_bas_personel():

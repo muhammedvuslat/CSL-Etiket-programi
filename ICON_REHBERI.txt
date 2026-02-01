@@ -1,0 +1,312 @@
+═══════════════════════════════════════════════════════════════════════════════
+    CSL ETİKET PROGRAMI - ICON EKLEME REHBERİ
+═══════════════════════════════════════════════════════════════════════════════
+
+Bu rehber, CSL Etiket programına özel bir icon (simge) eklemeniz için 
+gereken tüm adımları içerir.
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 1: ICON DOSYASI HAZIRLAMA
+═══════════════════════════════════════════════════════════════════════════════
+
+ICON BOYUTLARI:
+Windows için .ico dosyası şu boyutları içermelidir:
+- 16x16 piksel   (küçük simge)
+- 32x32 piksel   (normal simge)
+- 48x48 piksel   (büyük simge)
+- 64x64 piksel   (ekstra büyük)
+- 128x128 piksel (yüksek çözünürlük)
+- 256x256 piksel (HD simge)
+
+ÖNERİLEN BOYUT: 256x256 piksel (tüm boyutlar otomatik oluşturulur)
+
+DOSYA FORMATI: .ico (Windows Icon)
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 2: ICON OLUŞTURMA YÖNTEMLERİ
+═══════════════════════════════════════════════════════════════════════════════
+
+YÖNTEM 1: Online Araçlar (En Kolay)
+────────────────────────────────────
+1. Bir PNG/JPG görsel hazırlayın (256x256 piksel önerilir)
+2. Şu sitelerden birini kullanın:
+   
+   • https://www.icoconverter.com/
+     - PNG/JPG yükleyin
+     - "Convert ICO" butonuna tıklayın
+     - .ico dosyasını indirin
+   
+   • https://convertio.co/tr/png-ico/
+     - Dosya yükleyin
+     - ICO formatını seçin
+     - Dönüştür ve indir
+   
+   • https://favicon.io/favicon-converter/
+     - Görsel yükleyin
+     - ICO olarak indir
+
+YÖNTEM 2: GIMP (Ücretsiz Yazılım)
+────────────────────────────────────
+1. GIMP'i indirin: https://www.gimp.org/
+2. Görselinizi açın (File > Open)
+3. Boyutlandırın: Image > Scale Image (256x256)
+4. Export edin: File > Export As
+5. Dosya adını "csl_icon.ico" yapın
+6. Export butonuna tıklayın
+
+YÖNTEM 3: Photoshop
+────────────────────────────────────
+1. 256x256 piksel yeni dosya oluşturun
+2. Icon tasarımınızı yapın
+3. File > Save As
+4. Format: ICO (Windows Icon)
+5. Kaydedin
+
+YÖNTEM 4: Python ile Oluşturma
+────────────────────────────────────
+Eğer bir PNG dosyanız varsa:
+
+```python
+from PIL import Image
+
+# PNG'yi aç
+img = Image.open("logo.png")
+
+# Boyutlandır
+img = img.resize((256, 256), Image.LANCZOS)
+
+# ICO olarak kaydet
+img.save("csl_icon.ico", format="ICO", sizes=[(16,16), (32,32), (48,48), (64,64), (128,128), (256,256)])
+```
+
+Komutu çalıştır:
+```bash
+pip install pillow
+python icon_olustur.py
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 3: ICON DOSYASINI PROJEYE EKLEME
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Icon dosyanızı (örn: csl_icon.ico) proje klasörüne kopyalayın:
+   
+   CSL-Etiket-programi/
+   ├── csl_etiket.py
+   ├── csl_icon.ico  ← BURAYA
+   └── personel.db
+
+2. Dosya adını not edin (örn: csl_icon.ico)
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 4: PAKETLEME SIRASINDA ICON EKLEME
+═══════════════════════════════════════════════════════════════════════════════
+
+PyInstaller komutu şu şekilde değişir:
+
+ICON OLMADAN (ESKİ):
+────────────────────────────────────
+pyinstaller --onefile --windowed --name="CSL_Etiket" csl_etiket.py
+
+
+ICON İLE (YENİ):
+────────────────────────────────────
+pyinstaller --onefile --windowed --name="CSL_Etiket" --icon=csl_icon.ico csl_etiket.py
+
+
+AÇIKLAMA:
+--icon=csl_icon.ico  → Icon dosyasının yolunu belirtir
+
+Eğer icon farklı bir klasördeyse:
+--icon=icons/csl_icon.ico
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 5: PROGRAMDA ICON GÖSTERME (RUNTIME)
+═══════════════════════════════════════════════════════════════════════════════
+
+Program çalışırken pencerede icon göstermek için:
+
+csl_etiket.py dosyasına şu satırı ekleyin:
+
+```python
+# Ana pencere
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("dark-blue")
+
+root = ctk.CTk()
+root.title("CSL Etiket Programı")
+root.geometry("800x700")
+
+# Icon ekle (Windows için)
+try:
+    root.iconbitmap("csl_icon.ico")
+except:
+    pass  # Icon bulunamazsa hata verme
+```
+
+NOT: CustomTkinter ile iconbitmap bazen çalışmayabilir. 
+Bu durumda sadece .exe icon'u yeterlidir.
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 6: TEST ETME
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Paketleme komutunu çalıştırın:
+   pyinstaller --onefile --windowed --name="CSL_Etiket" --icon=csl_icon.ico csl_etiket.py
+
+2. dist klasörüne gidin:
+   cd dist
+
+3. CSL_Etiket.exe dosyasına sağ tıklayın
+
+4. Icon'u kontrol edin:
+   ✓ Dosya simgesi değişti mi?
+   ✓ Görev çubuğunda icon görünüyor mu?
+   ✓ Alt+Tab'da icon görünüyor mu?
+
+═══════════════════════════════════════════════════════════════════════════════
+ICON TASARIM ÖNERİLERİ
+═══════════════════════════════════════════════════════════════════════════════
+
+İYİ BİR ICON İÇİN:
+✓ Basit ve anlaşılır olmalı
+✓ Küçük boyutlarda da okunabilir olmalı
+✓ Yüksek kontrast kullanın
+✓ Çok fazla detay koymayın
+✓ Şirket/marka renklerini kullanın
+
+CSL ETİKET PROGRAMI İÇİN FİKİRLER:
+• QR kod simgesi
+• Etiket/barkod simgesi
+• Yazıcı simgesi
+• "CSL" harfleri
+• Kombinasyon (QR + Etiket)
+
+RENK ÖNERİLERİ:
+• Mavi tonları (profesyonel)
+• Yeşil tonları (onay/güvenlik)
+• Turuncu tonları (enerji/dikkat)
+• Gri tonları (nötr/modern)
+
+═══════════════════════════════════════════════════════════════════════════════
+SORUN GİDERME
+═══════════════════════════════════════════════════════════════════════════════
+
+SORUN 1: "Icon dosyası bulunamadı" hatası
+ÇÖZÜM:
+- Icon dosyasının proje klasöründe olduğundan emin olun
+- Dosya adını kontrol edin (büyük/küçük harf duyarlı)
+- Tam yol kullanın: --icon=C:\Users\...\csl_icon.ico
+
+SORUN 2: Icon .exe'de görünmüyor
+ÇÖZÜM:
+- .ico formatında olduğundan emin olun (.png değil!)
+- Icon dosyası bozuk olabilir, yeniden oluşturun
+- Windows Explorer'ı yeniden başlatın (icon cache)
+- Bilgisayarı yeniden başlatın
+
+SORUN 3: Icon bulanık görünüyor
+ÇÖZÜM:
+- Daha yüksek çözünürlük kullanın (256x256)
+- Vektör grafik kullanın
+- Keskin kenarlar ve net çizgiler kullanın
+
+SORUN 4: Icon renkli değil, siyah-beyaz
+ÇÖZÜM:
+- Icon dosyasının renkli olduğundan emin olun
+- 32-bit renk derinliği kullanın
+- Alpha channel (şeffaflık) ekleyin
+
+═══════════════════════════════════════════════════════════════════════════════
+HIZLI BAŞLANGIÇ - HAZIR ICON KULLANMA
+═══════════════════════════════════════════════════════════════════════════════
+
+Eğer hızlıca bir icon istiyorsanız:
+
+1. Ücretsiz icon siteleri:
+   • https://www.flaticon.com/ (ücretsiz iconlar)
+   • https://icons8.com/ (ücretsiz iconlar)
+   • https://www.iconfinder.com/ (ücretsiz ve ücretli)
+
+2. "QR code icon" veya "label icon" arayın
+
+3. ICO formatında indirin veya PNG'yi ICO'ya çevirin
+
+4. Proje klasörüne kopyalayın
+
+5. Paketleme komutunu çalıştırın
+
+═══════════════════════════════════════════════════════════════════════════════
+ÖRNEK: BASIT BİR ICON OLUŞTURMA
+═══════════════════════════════════════════════════════════════════════════════
+
+Python ile basit bir QR kod icon'u oluşturalım:
+
+```python
+from PIL import Image, ImageDraw, ImageFont
+
+# 256x256 beyaz arka plan
+img = Image.new('RGB', (256, 256), color='white')
+draw = ImageDraw.Draw(img)
+
+# Mavi çerçeve
+draw.rectangle([20, 20, 236, 236], outline='#0066CC', width=8)
+
+# QR kod benzeri kareler (basitleştirilmiş)
+square_size = 20
+for i in range(3):
+    for j in range(3):
+        if (i + j) % 2 == 0:
+            x = 60 + i * 50
+            y = 60 + j * 50
+            draw.rectangle([x, y, x+square_size, y+square_size], fill='#0066CC')
+
+# CSL yazısı (opsiyonel - font gerektirir)
+# draw.text((128, 200), "CSL", fill='#0066CC', anchor="mm")
+
+# ICO olarak kaydet
+img.save("csl_icon.ico", format="ICO", sizes=[(16,16), (32,32), (48,48), (64,64), (128,128), (256,256)])
+print("Icon oluşturuldu: csl_icon.ico")
+```
+
+Çalıştır:
+```bash
+python icon_olustur.py
+```
+
+═══════════════════════════════════════════════════════════════════════════════
+KOMPLE PAKETLEME KOMUTU (ICON DAHİL)
+═══════════════════════════════════════════════════════════════════════════════
+
+Tüm özellikleri içeren paketleme komutu:
+
+pyinstaller --onefile --windowed --name="CSL_Etiket" --icon=csl_icon.ico --add-data "personel.db;." csl_etiket.py
+
+AÇIKLAMA:
+--onefile          : Tek .exe dosyası
+--windowed         : Konsol penceresi yok
+--name             : Program adı
+--icon             : Icon dosyası
+--add-data         : Veritabanı dahil
+csl_etiket.py      : Ana program
+
+═══════════════════════════════════════════════════════════════════════════════
+ÖNEMLİ NOTLAR
+═══════════════════════════════════════════════════════════════════════════════
+
+✓ Icon dosyası .ico formatında OLMALIDIR (.png, .jpg değil!)
+✓ Icon dosyası proje klasöründe olmalıdır
+✓ Paketleme sırasında icon otomatik olarak .exe'ye gömülür
+✓ Icon değişikliği için yeniden paketleme gerekir
+✓ Windows icon cache'i bazen eski icon'u gösterebilir (yeniden başlatın)
+✓ Icon boyutu genellikle 50-100 KB civarındadır
+✓ Çok büyük icon dosyaları .exe boyutunu artırır
+
+═══════════════════════════════════════════════════════════════════════════════
+SONU
+═══════════════════════════════════════════════════════════════════════════════
+
+Bu rehberi takip ederek CSL Etiket programınıza profesyonel bir icon 
+ekleyebilirsiniz.
+
+İyi çalışmalar!
