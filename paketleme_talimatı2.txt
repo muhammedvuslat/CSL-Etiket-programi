@@ -1,0 +1,257 @@
+═══════════════════════════════════════════════════════════════════════════════
+    CSL ETİKET PROGRAMI - WINDOWS PAKETLEME KILAVUZU
+═══════════════════════════════════════════════════════════════════════════════
+
+Bu kılavuz, CSL Etiket programını Windows'ta tek bir .exe dosyası olarak 
+paketlemek için gereken tüm adımları içerir.
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 1: PYTHON KURULUMU
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Python 3.9 veya üzeri sürümü indirin:
+   https://www.python.org/downloads/
+
+2. Kurulum sırasında:
+   ✓ "Add Python to PATH" seçeneğini işaretleyin
+   ✓ "Install for all users" seçeneğini işaretleyin
+
+3. Kurulumu doğrulayın (CMD'de):
+   python --version
+   pip --version
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 2: GEREKLİ PAKETLERI KURMA
+═══════════════════════════════════════════════════════════════════════════════
+
+CMD veya PowerShell'i YÖNETİCİ OLARAK açın ve şu komutları sırayla çalıştırın:
+
+
+# 1. Pip'i güncelleyin
+python -m pip install --upgrade pip
+
+# 2. Uygulama bağımlılıklarını kurun
+pip install customtkinter
+pip install pillow
+pip install qrcode
+pip install reportlab
+
+# 3. Paketleme aracını kurun
+pip install pyinstaller
+
+# 4. Kurulumu doğrulayın
+pip list
+
+Beklenen çıktıda şunlar olmalı:
+- customtkinter
+- Pillow
+- qrcode
+- reportlab
+- pyinstaller
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 3: PROJE DOSYALARINI HAZIRLAMA
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Proje klasörüne gidin:
+   cd "C:\Users\KULLANICI_ADI\Desktop\CSL-Etiket-programi"
+
+2. Dosya yapısını kontrol edin:
+   dir
+
+Şunlar olmalı:
+- csl_etiket.py (ana program)
+- personel.db (veritabanı - opsiyonel)
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 4: PAKETLEME (TEK DOSYA .EXE)
+═══════════════════════════════════════════════════════════════════════════════
+
+Aşağıdaki komutu çalıştırın (TEK SATIRDA):
+
+
+pyinstaller --onefile --windowed --name="CSL_Etiket" --icon=NONE --add-data "personel.db;." csl_etiket.py
+
+KOMUT AÇIKLAMASI:
+--onefile          : Tek bir .exe dosyası oluşturur
+--windowed         : Konsol penceresi açmaz (sadece GUI)
+--name             : .exe dosyasının adı
+--icon=NONE        : İkon yok (isterseniz .ico dosyası ekleyebilirsiniz)
+--add-data         : Veritabanını pakete dahil eder
+csl_etiket.py      : Ana program dosyası
+
+NOT: Eğer personel.db yoksa, --add-data kısmını çıkarın:
+pyinstaller --onefile --windowed --name="CSL_Etiket" csl_etiket.py
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 5: PAKETLEME SONRASI
+═══════════════════════════════════════════════════════════════════════════════
+
+Paketleme tamamlandığında şu klasörler oluşur:
+
+📁 build/          (geçici dosyalar - silinebilir)
+📁 dist/           (BURASI ÖNEMLİ!)
+   └─ CSL_Etiket.exe  ← BU DOSYA DAĞITILACAK
+📄 CSL_Etiket.spec (paketleme ayarları)
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 6: TEST ETME
+═══════════════════════════════════════════════════════════════════════════════
+
+1. dist klasörüne gidin:
+   cd dist
+
+2. CSL_Etiket.exe dosyasını çift tıklayarak çalıştırın
+
+3. Test edin:
+   ✓ Login ekranı açılıyor mu?
+   ✓ Admin girişi çalışıyor mu? (admin / admin123)
+   ✓ Personel ekleme çalışıyor mu?
+   ✓ Etiket basma çalışıyor mu?
+   ✓ PDF açılıyor mu?
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ADIM 7: DAĞITIM
+═══════════════════════════════════════════════════════════════════════════════
+
+CSL_Etiket.exe dosyasını dağıtmak için:
+
+SEÇENEK 1: Basit Dağıtım
+- Sadece CSL_Etiket.exe dosyasını kopyalayın
+- Kullanıcılar çift tıklayarak çalıştırabilir
+- Veritabanı otomatik oluşturulur
+
+SEÇENEK 2: Kurulum Paketi (Opsiyonel)
+- Inno Setup kullanarak installer oluşturabilirsiniz
+- https://jrsoftware.org/isinfo.php
+
+═══════════════════════════════════════════════════════════════════════════════
+SORUN GİDERME
+═══════════════════════════════════════════════════════════════════════════════
+
+SORUN 1: "Python bulunamadı" hatası
+ÇÖZÜM: Python'u PATH'e ekleyin veya yeniden kurun
+
+SORUN 2: "pip tanınmıyor" hatası
+ÇÖZÜM: python -m pip install ... şeklinde kullanın
+
+SORUN 3: .exe çalışmıyor
+ÇÖZÜM: 
+- Antivirüs programını geçici olarak kapatın
+- Windows Defender'da istisna ekleyin
+- --windowed yerine --console kullanarak hata mesajlarını görün
+
+SORUN 4: PDF açılmıyor
+ÇÖZÜM: 
+- Adobe Reader veya başka bir PDF okuyucu kurulu olmalı
+- Windows varsayılan PDF okuyucusu ayarlanmalı
+
+SORUN 5: Veritabanı hatası
+ÇÖZÜM:
+- Program ilk çalıştırmada personel.db otomatik oluşturur
+- Eğer sorun devam ederse, eski personel.db'yi silin
+
+
+═══════════════════════════════════════════════════════════════════════════════
+GELİŞMİŞ PAKETLEME SEÇENEKLERİ
+═══════════════════════════════════════════════════════════════════════════════
+
+İKON EKLEMEK İÇİN:
+1. .ico formatında bir ikon hazırlayın (örn: logo.ico)
+2. Komutu şöyle değiştirin:
+   pyinstaller --onefile --windowed --name="CSL_Etiket" --icon=logo.ico csl_etiket.py
+
+DAHA KÜÇÜK .EXE İÇİN:
+pyinstaller --onefile --windowed --name="CSL_Etiket" --strip --noupx csl_etiket.py
+
+KONSOL PENCERESI İLE (DEBUG İÇİN):
+pyinstaller --onefile --console --name="CSL_Etiket" csl_etiket.py
+
+YENİDEN PAKETLEME:
+Eğer değişiklik yaptıysanız:
+1. build ve dist klasörlerini silin
+2. CSL_Etiket.spec dosyasını silin
+3. Paketleme komutunu tekrar çalıştırın
+
+═══════════════════════════════════════════════════════════════════════════════
+HIZLI BAŞLANGIÇ KOMUTLARI (KOPYALA-YAPIŞTIR)
+═══════════════════════════════════════════════════════════════════════════════
+
+# Tüm kurulum (tek seferde):
+python -m pip install --upgrade pip
+pip install customtkinter pillow qrcode reportlab pyinstaller
+
+# Paketleme (tek komut):
+pyinstaller --onefile --windowed --name="CSL_Etiket" csl_etiket.py
+
+# Test:
+cd dist
+CSL_Etiket.exe
+
+═══════════════════════════════════════════════════════════════════════════════
+SİSTEM GEREKSİNİMLERİ
+═══════════════════════════════════════════════════════════════════════════════
+
+GELIŞTIRME BİLGISAYARI:
+- Windows 10/11 (64-bit)
+- Python 3.9 veya üzeri
+- 4 GB RAM (minimum)
+- 500 MB boş disk alanı
+
+KULLANICI BİLGISAYARI:
+- Windows 10/11 (64-bit)
+- .NET Framework (genellikle zaten yüklü)
+- PDF okuyucu (Adobe Reader, Edge, vb.)
+- 2 GB RAM (minimum)
+- 100 MB boş disk alanı
+
+
+═══════════════════════════════════════════════════════════════════════════════
+NOTLAR VE İPUÇLARI
+═══════════════════════════════════════════════════════════════════════════════
+
+✓ İlk paketleme 5-10 dakika sürebilir (normal)
+✓ .exe dosyası ~50-80 MB olacaktır (normal)
+✓ Antivirüs programları bazen .exe'yi engelleyebilir (false positive)
+✓ Windows Defender SmartScreen uyarısı çıkabilir (normal)
+✓ Kullanıcılara "Yine de çalıştır" seçeneğini gösterin
+✓ Dijital imza eklemek için kod imzalama sertifikası gerekir
+
+PERFORMANS İPUÇLARI:
+- Program ilk açılışta 2-3 saniye sürebilir (normal)
+- Veritabanı büyüdükçe yavaşlama olabilir (100.000+ kayıt)
+- SSD kullanımı önerilir
+
+GÜVENLİK İPUÇLARI:
+- Varsayılan admin şifresi değiştirilmelidir
+- Veritabanı düzenli yedeklenmelidir
+- Geçici PDF dosyaları 30 saniye sonra otomatik silinir
+
+═══════════════════════════════════════════════════════════════════════════════
+DESTEK VE GÜNCELLEMELER
+═══════════════════════════════════════════════════════════════════════════════
+
+Program Versiyonu: 2.0
+Son Güncelleme: 2026-01-28
+
+Özellikler:
+✓ Kullanıcı yönetimi (Admin, Takım Lideri, Vardiya Amiri)
+✓ Personel yönetimi
+✓ QR kodlu etiket basma
+✓ Etiket kontrol sistemi
+✓ Personel atama sistemi
+✓ Veritabanı yedekleme
+✓ Thread-based performans optimizasyonu
+✓ Widget caching
+✓ Veritabanı indexleme
+
+═══════════════════════════════════════════════════════════════════════════════
+SONU
+═══════════════════════════════════════════════════════════════════════════════
+
+Bu kılavuzu takip ederek CSL Etiket programını başarıyla paketleyebilirsiniz.
+
+Sorularınız için: [İletişim bilgilerinizi buraya ekleyin]
+
+İyi çalışmalar!
