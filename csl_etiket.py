@@ -771,7 +771,7 @@ bas_title = ctk.CTkLabel(bas_frame, text="Etiket Bas", font=ctk.CTkFont(size=16,
 bas_title.pack(pady=10)
 
 personel_var = ctk.StringVar()
-personel_combo = ctk.CTkComboBox(bas_frame, values=[], variable=personel_var)
+personel_combo = ctk.CTkComboBox(bas_frame, values=[], variable=personel_var, state="readonly", width=300)
 personel_combo.pack(pady=10)
 
 adet_label = ctk.CTkLabel(bas_frame, text="Adet:")
